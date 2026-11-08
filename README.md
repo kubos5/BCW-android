@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="BCW — Better ClasseViVa per Android" width="600" />
+  <img src="docs/android.gif" alt="BCW — Better ClasseViVa per Android" />
 </p>
 
 <h1 align="center">BCW per Android</h1>
