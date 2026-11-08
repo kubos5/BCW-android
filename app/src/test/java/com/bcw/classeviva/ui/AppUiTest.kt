@@ -11,6 +11,10 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onFirst
 import com.bcw.classeviva.BCWApplication
 import com.bcw.classeviva.MainActivity
@@ -62,8 +66,8 @@ class AppUiTest {
      * La cattura di Compose aspetterebbe un nuovo fotogramma, che con il tempo fermo non arriva.
      */
     @Suppress("UNCHECKED_CAST")
-    private fun shot(name: String) {
-        settle(800)
+    private fun shot(name: String, wait: Long = 800) {
+        if (wait > 0) settle(wait)
         val decor = rule.activity.window.decorView
         val bitmap = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -131,7 +135,10 @@ class AppUiTest {
         shot("onboarding-01-welcome")
         click("Inizia")
         shot("onboarding-02-colors")
-        click("Verde")
+        waitForText("Verde")
+        text("Verde").performClick()
+        settle(350)
+        shot("onboarding-02a-reveal", wait = 0)
         settle(1500)
         shot("onboarding-02b-colors-chosen")
         click("Continua")
@@ -175,15 +182,60 @@ class AppUiTest {
     fun demoTabs() {
         startDemo()
         shot("demo-01-dashboard")
+        // Il giorno segue il dito: a metà trascinamento è spostato, lasciando cambia.
+        val list = rule.onAllNodes(hasScrollToIndexAction()).onFirst()
+        list.performTouchInput {
+            down(center)
+            moveBy(Offset(-60f, 0f))
+            moveBy(Offset(-240f, 0f))
+        }
+        settle(100)
+        shot("demo-01b-swipe-held", wait = 0)
+        list.performTouchInput {
+            moveBy(Offset(-300f, 0f))
+            up()
+        }
+        settle(150)
+        shot("demo-01c-swipe-release", wait = 0)
+        waitForText("Martedì")
+        shot("demo-01d-swipe-done")
+        list.performTouchInput {
+            down(center)
+            moveBy(Offset(60f, 0f))
+            moveBy(Offset(60f, 0f))
+            up()
+        }
+        settle()
+        check(rule.onAllNodesWithText("Martedì").fetchSemanticsNodes().isNotEmpty()) { "Uno scorrimento corto non deve cambiare giorno" }
         rule.onNode(hasText("Voti") and hasClickAction()).performClick()
         settle()
         shot("demo-02-grades")
+        click("E se prendessi…")
+        rule.onAllNodes(hasScrollToIndexAction()).onFirst().performScrollToIndex(2)
+        settle()
+        shot("demo-02c-whatif")
+        rule.onAllNodes(hasScrollToIndexAction()).onFirst().performScrollToIndex(0)
+        settle()
         rule.onNode(hasText("Tu") and hasClickAction()).performClick()
+        settle(120)
+        shot("demo-03-nav-transition", wait = 0)
         settle()
         shot("demo-03-you")
-        rule.onAllNodesWithText("comunicazioni da leggere", substring = true).onFirst().performClick()
+        // Un nuovo tocco su Tu non deve far richiudere le pagine aperte dopo.
+        rule.onNode(hasText("Tu") and hasClickAction()).performClick()
         settle()
+        rule.onAllNodesWithText("comunicazioni da leggere", substring = true).onFirst().performClick()
+        waitForText("Cerca nelle comunicazioni")
+        settle(1500)
+        check(rule.onAllNodesWithText("Cerca nelle comunicazioni").fetchSemanticsNodes().isNotEmpty()) { "La bacheca si è richiusa" }
         shot("demo-03b-noticeboard")
+        rule.activity.onBackPressedDispatcher.onBackPressed()
+        settle()
+        click("Ritardi")
+        waitForText("Assenze e ritardi")
+        settle(1500)
+        check(rule.onAllNodesWithText("Assenze e ritardi").fetchSemanticsNodes().isNotEmpty()) { "Assenze e ritardi si è richiusa" }
+        shot("demo-03e-absences")
         rule.activity.onBackPressedDispatcher.onBackPressed()
         settle()
         clickDescription("Impostazioni")

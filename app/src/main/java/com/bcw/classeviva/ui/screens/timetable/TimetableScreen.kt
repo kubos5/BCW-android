@@ -3,6 +3,7 @@ package com.bcw.classeviva.ui.screens.timetable
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.LinearEasing
@@ -112,6 +113,8 @@ import com.bcw.classeviva.ui.components.mix
 import com.bcw.classeviva.ui.icons.Icon
 import com.bcw.classeviva.ui.nav.Page
 import com.bcw.classeviva.ui.screens.daySwipe
+import com.bcw.classeviva.ui.screens.daySwipeOffset
+import com.bcw.classeviva.ui.screens.rememberDaySwipeState
 import com.bcw.classeviva.ui.screens.rememberDaySelection
 import com.bcw.classeviva.ui.shell.HidesNavigationBar
 import com.bcw.classeviva.ui.shell.LocalModel
@@ -171,6 +174,7 @@ fun TimetableScreen() {
     val haptics = LocalHapticFeedback.current
     val now = rememberNow()
     val selection = rememberDaySelection { defaultTimetableDay({ store.entries(it) }) }
+    val swipe = rememberDaySwipeState()
     var editing by rememberSaveable { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<TimetableSheet?>(null) }
     var picking by remember { mutableStateOf(false) }
@@ -245,7 +249,7 @@ fun TimetableScreen() {
             listState = listState,
             maxContentWidth = if (weekColumns) 1600.dp else 840.dp,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp + shell.bottomSpace + bottomExtra),
-            listModifier = if (editing) Modifier else Modifier.daySwipe { select(day.plusDays(it.toLong())) },
+            listModifier = if (editing) Modifier else Modifier.daySwipe(swipe) { select(day.plusDays(it.toLong())) },
             overlay = {
                 val bottom = shell.bottomSpace + 16.dp
                 AnimatedVisibility(
@@ -283,15 +287,17 @@ fun TimetableScreen() {
                 AnimatedContent(mode, transitionSpec = { Transitions.fadeThrough(reduced) using SizeTransform(clip = false) { _, _ -> snap() } }, label = "ttMode") { shown ->
                     if (shown == TimetableMode.list) {
                         AnimatedContent(day, transitionSpec = { Transitions.sharedAxisX(selection.dir, reduced) }, label = "ttDay") { d ->
-                            DayList(
-                                store.dayContent(d, model.events(d), splitAtBreaks = true), now,
-                                jump = if (d != defaultDay) DayJump(jumpTitle(defaultDay)) { select(defaultDay) } else null,
-                                onOpen = { entry -> sheet = TimetableSheet.Detail(entry.id, d) },
-                                onEdit = { sheet = TimetableSheet.Editor(it) },
-                                onSeries = { sheet = TimetableSheet.Series(it) },
-                                onNew = { sheet = TimetableSheet.Editor(weekday = Weekday.of(d)) },
-                                onGenerate = { sheet = TimetableSheet.Generator },
-                            )
+                            Box(Modifier.daySwipeOffset(swipe, exiting = transition.targetState == EnterExitState.PostExit)) {
+                                DayList(
+                                    store.dayContent(d, model.events(d), splitAtBreaks = true), now,
+                                    jump = if (d != defaultDay) DayJump(jumpTitle(defaultDay)) { select(defaultDay) } else null,
+                                    onOpen = { entry -> sheet = TimetableSheet.Detail(entry.id, d) },
+                                    onEdit = { sheet = TimetableSheet.Editor(it) },
+                                    onSeries = { sheet = TimetableSheet.Series(it) },
+                                    onNew = { sheet = TimetableSheet.Editor(weekday = Weekday.of(d)) },
+                                    onGenerate = { sheet = TimetableSheet.Generator },
+                                )
+                            }
                         }
                     } else {
                         val timeline = @Composable { shownDays: List<LocalDate> ->
@@ -304,7 +310,9 @@ fun TimetableScreen() {
                             )
                         }
                         if (editing || weekColumns) timeline(days)
-                        else AnimatedContent(day, transitionSpec = { Transitions.sharedAxisX(selection.dir, reduced) }, label = "ttGrid") { d -> timeline(listOf(d)) }
+                        else AnimatedContent(day, transitionSpec = { Transitions.sharedAxisX(selection.dir, reduced) }, label = "ttGrid") { d ->
+                            Box(Modifier.daySwipeOffset(swipe, exiting = transition.targetState == EnterExitState.PostExit)) { timeline(listOf(d)) }
+                        }
                     }
                 }
             }

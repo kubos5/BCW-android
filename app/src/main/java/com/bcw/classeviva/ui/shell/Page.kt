@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -116,12 +117,17 @@ fun PageScaffold(
     val scrolled = fixed == null && listState.canScrollBackward
 
     // Nuovo tocco sulla scheda: in cima, poi alla pagina principale, poi l'azione della pagina.
+    // Solo la pagina in vista ascolta, e solo i tocchi arrivati mentre è in vista.
+    val reselect by rememberUpdatedState(onReselect)
+    val scrollsToTop by rememberUpdatedState(reselectScrollsToTop)
     if (page != null && page.isCurrent) {
-        LaunchedEffect(nav.reselection) {
-            if (nav.reselectedTab != page.tab || nav.reselection == 0) return@LaunchedEffect
-            if (reselectScrollsToTop && listState.canScrollBackward) listState.animateScrollToItem(0)
-            else if (!page.isRoot) nav.popToRoot()
-            else onReselect?.invoke()
+        LaunchedEffect(page.tab) {
+            nav.reselections.collect { tab ->
+                if (tab != page.tab) return@collect
+                if (scrollsToTop && listState.canScrollBackward) listState.animateScrollToItem(0)
+                else if (!page.isRoot) nav.popToRoot()
+                else reselect?.invoke()
+            }
         }
     }
 

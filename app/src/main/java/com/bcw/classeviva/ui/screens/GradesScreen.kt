@@ -430,7 +430,7 @@ private fun GradeSimulator(book: GradeBook, period: Int?, subjectId: Long?, sugg
                 if (subjectId == null && subjects.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Materia", style = Theme.type.style(15), color = Theme.scheme.onSurface)
-                        SelectButton(subjects, target, { s.chosen = it }, Modifier.weight(1f), maxLines = 2)
+                        SelectButton(subjects, target, { s.chosen = it }, Modifier.weight(1f), maxLines = 2, alignEnd = true)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {

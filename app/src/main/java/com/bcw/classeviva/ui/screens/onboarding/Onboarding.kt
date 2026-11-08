@@ -17,6 +17,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -568,23 +570,35 @@ private fun DashboardPage(onNext: () -> Unit) {
     }
 }
 
-/** Una scelta tra due, in una scheda grande con un'anteprima stilizzata. */
+/**
+ * Una scelta tra due, in una scheda grande con un'anteprima stilizzata: titolo e spiegazione
+ * centrati sotto, la spunta in alto a destra sopra l'anteprima (come sul web e nell'app).
+ */
 @Composable
 private fun PreviewChoice(title: String, subtitle: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit, preview: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(Theme.radii.xl)
-    Column(
-        modifier.clip(shape).background(if (selected) Theme.scheme.secondaryContainer else Theme.scheme.surfaceContainer)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val radius by animateDpAsState(if (pressed) Theme.radii.l else Theme.radii.xl, Theme.motion.fastSpatialSpec(), label = "choiceRadius")
+    val shape = RoundedCornerShape(radius)
+    val check by animateFloatAsState(if (selected) 1f else 0f, Theme.motion.defaultSpatialSpec(), label = "choiceCheck")
+    val ink = if (selected) Theme.scheme.onSecondaryContainer else Theme.scheme.onSurface
+    Box(
+        modifier.clip(shape).background(if (selected) Theme.scheme.secondaryContainer else Theme.scheme.surfaceContainerLow)
             .then(if (selected) Modifier.border(2.dp, Theme.scheme.primary, shape) else Modifier)
-            .clickable(onClick = onClick).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), onClick = onClick),
     ) {
-        Box(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(Theme.radii.l)).background(Theme.scheme.surface).padding(10.dp)) { preview() }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = Theme.type.style(16, 600), color = if (selected) Theme.scheme.onSecondaryContainer else Theme.scheme.onSurface)
-                Text(subtitle, style = Theme.type.style(13), color = Theme.scheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.fillMaxWidth().height(124.dp).clip(RoundedCornerShape(Theme.radii.l)).background(Theme.scheme.surfaceContainerHigh).padding(10.dp)) { preview() }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = Theme.type.style(15, 650), color = ink, textAlign = TextAlign.Center)
+                Text(subtitle, style = Theme.type.style(12), color = if (selected) ink else Theme.scheme.onSurfaceVariant, textAlign = TextAlign.Center)
             }
-            if (selected) Icon("checkCircleFill", tint = Theme.scheme.primary)
+        }
+        if (check > 0.01f) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(16.dp).size(24.dp).scale(check).clip(CircleShape).background(Theme.scheme.surfaceContainerLowest),
+                contentAlignment = Alignment.Center,
+            ) { Icon("checkCircleFill", size = 24.dp, tint = Theme.scheme.primary) }
         }
     }
 }
@@ -592,18 +606,18 @@ private fun PreviewChoice(title: String, subtitle: String, selected: Boolean, mo
 @Composable
 private fun DashboardPreview(mode: DashboardMode) {
     val s = Theme.scheme
-    val row = @Composable { accent: Boolean -> Box(Modifier.fillMaxWidth().height(18.dp).clip(RoundedCornerShape(6.dp)).background(if (accent) s.primaryContainer else s.surfaceContainerHigh)) }
+    val row = @Composable { accent: Boolean -> Box(Modifier.fillMaxWidth().height(18.dp).clip(RoundedCornerShape(6.dp)).background(if (accent) s.primaryContainer else s.surfaceContainerHighest)) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (mode == DashboardMode.list) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (i in 0 until 5) Box(Modifier.weight(if (i == 2) 1.4f else 1f).height(26.dp).clip(RoundedCornerShape(8.dp)).background(if (i == 2) s.primary else s.surfaceContainerHigh))
+                for (i in 0 until 5) Box(Modifier.weight(if (i == 2) 1.4f else 1f).height(26.dp).clip(RoundedCornerShape(8.dp)).background(if (i == 2) s.primary else s.surfaceContainerHighest))
             }
             Box(Modifier.width(70.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(s.onSurface.copy(alpha = 0.7f)))
             row(true); row(false); row(false)
         } else {
             for (w in 0 until 4) {
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    for (d in 0 until 7) Box(Modifier.weight(1f).height(14.dp).clip(CircleShape).background(if (w == 1 && d == 3) s.primary else s.surfaceContainerHigh))
+                    for (d in 0 until 7) Box(Modifier.weight(1f).height(14.dp).clip(CircleShape).background(if (w == 1 && d == 3) s.primary else s.surfaceContainerHighest))
                 }
             }
             row(true); row(false)

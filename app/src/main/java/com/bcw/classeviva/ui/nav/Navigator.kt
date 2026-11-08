@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 /** Le quattro destinazioni principali (Dashboard, Orario, Voti, Tu). */
 enum class Tab(val title: String, val icon: String, val iconSelected: String) {
@@ -71,11 +73,12 @@ class Navigator {
     /** +1 avanti, -1 indietro, 0 cambio di scheda. */
     var direction by mutableIntStateOf(0)
         private set
-    /** Nuovo tocco sulla scheda aperta (le pagine lo ascoltano per la loro azione). */
-    var reselection by mutableIntStateOf(0)
-        private set
-    var reselectedTab by mutableStateOf<Tab?>(null)
-        private set
+    /**
+     * Nuovo tocco sulla scheda aperta: un evento che riceve solo la pagina in vista in quel momento.
+     * Prima era un contatore, e ogni pagina aperta dopo lo rileggeva e tornava alla pagina principale.
+     */
+    private val reselectEvents = MutableSharedFlow<Tab>(extraBufferCapacity = 1)
+    val reselections: SharedFlow<Tab> = reselectEvents
     /** Ricerca aperta dalla barra in cima alla Dashboard. */
     var searching by mutableStateOf(false)
 
@@ -85,8 +88,7 @@ class Navigator {
 
     fun select(t: Tab) {
         if (t == tab) {
-            reselectedTab = t
-            reselection += 1
+            reselectEvents.tryEmit(t)
             return
         }
         direction = 0

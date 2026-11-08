@@ -1,14 +1,22 @@
 package com.bcw.classeviva.ui.shell
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -25,7 +33,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,9 +58,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.ui.icons.Icon
 import com.bcw.classeviva.ui.nav.Tab
@@ -164,55 +169,120 @@ private fun TabsContent() {
 
 /**
  * Barra di navigazione flottante (come l'app iOS e il web): una pillola di 56 dp con i nomi delle
- * schede; quella aperta è piena nel primario con l'icona e la pillola scivola con la molla.
+ * schede; quella aperta è piena nel primario con l'icona. Come sul web, cambiando scheda la
+ * disposizione cambia subito, poi le schede scivolano dal posto di prima al nuovo e la pillola va
+ * dalla scheda di prima a quella nuova, con la stessa molla (prima l'icona si allargava e tutte le
+ * posizioni cambiavano a ogni fotogramma, e la pillola inseguiva un bersaglio che si spostava).
  */
 @Composable
 fun FloatingNavBar(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, onLongPressYou: () -> Unit) {
-    val density = LocalDensity.current
-    val positions = remember { mutableStateMapOf<Tab, Pair<Float, Float>>() }
     val haptics = LocalHapticFeedback.current
     val model = LocalModel.current
+    val reduced = Theme.reducedMotion
+    val spring = Theme.motion.defaultSpatialSpec<Float>()
+    // Posizione e larghezza (nella barra) di ogni scheda, già nella disposizione nuova.
+    val bounds = remember { mutableStateMapOf<Tab, Pair<Float, Float>>() }
+    val pillX = remember { Animatable(0f) }
+    val pillW = remember { Animatable(0f) }
+    var pillReady by remember { mutableStateOf(false) }
+    val target = bounds[selected]
+    LaunchedEffect(target) {
+        val (x, w) = target ?: return@LaunchedEffect
+        if (!pillReady || reduced) {
+            pillX.snapTo(x)
+            pillW.snapTo(w)
+            pillReady = true
+            return@LaunchedEffect
+        }
+        launch { pillX.animateTo(x, spring) }
+        launch { pillW.animateTo(w, spring) }
+    }
     Surface(
         shape = RoundedCornerShape(28.dp), color = Theme.scheme.surfaceContainerHigh,
         modifier = Modifier.height(56.dp).shadow(8.dp, RoundedCornerShape(28.dp), ambientColor = Theme.colors.shadow, spotColor = Theme.colors.shadow),
     ) {
         Box(Modifier.padding(6.dp)) {
-            val target = positions[selected]
-            if (target != null) {
-                val x by animateDpAsState(with(density) { target.first.toDp() }, Theme.motion.defaultSpatialSpec(), label = "pillX")
-                val w by animateDpAsState(with(density) { target.second.toDp() }, Theme.motion.defaultSpatialSpec(), label = "pillW")
-                Box(Modifier.offset { IntOffset(x.roundToPx(), 0) }.width(w).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Theme.scheme.primary))
+            if (pillReady) {
+                Box(
+                    Modifier
+                        .layout { measurable, _ ->
+                            val w = pillW.value.roundToInt()
+                            val placeable = measurable.measure(Constraints.fixed(w, 44.dp.roundToPx()))
+                            layout(w, placeable.height) { placeable.place(pillX.value.roundToInt(), 0) }
+                        }
+                        .clip(RoundedCornerShape(22.dp)).background(Theme.scheme.primary),
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
                 for (tab in tabs) {
-                    val isSelected = tab == selected
-                    val interaction = remember { MutableInteractionSource() }
-                    val pressed by interaction.collectIsPressedAsState()
-                    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, Theme.motion.fastSpatialSpec(), label = "press")
-                    val badge = if (tab == Tab.you) model.unreadNoticesCount + model.unreadNotesCount else 0
-                    Row(
-                        Modifier.height(44.dp).scale(scale).clip(RoundedCornerShape(22.dp))
-                            .combinedClickable(
-                                interactionSource = interaction, indication = androidx.compose.material3.ripple(),
-                                onLongClick = if (tab == Tab.you) ({ haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongPressYou() }) else null,
-                                onClick = { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); onSelect(tab) },
-                            )
-                            .onPlaced { c -> positions[tab] = c.positionInParent().x to c.size.width.toFloat() }
-                            .padding(horizontal = if (isSelected) 16.dp else 13.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        AnimatedVisibility(isSelected, enter = scaleIn(Theme.motion.defaultSpatialSpec(), initialScale = 0.4f) + fadeIn(), exit = fadeOut() + scaleOut()) {
-                            Icon(tab.iconSelected, size = 20.dp, tint = Theme.scheme.onPrimary)
-                        }
-                        Text(
-                            tab.title, style = Theme.type.style(14, if (isSelected) 650 else 550),
-                            color = if (isSelected) Theme.scheme.onPrimary else Theme.scheme.onSurfaceVariant, maxLines = 1,
-                        )
-                        if (badge > 0) Badge(containerColor = Theme.scheme.error) { Text(badge.toString()) }
-                    }
+                    NavBarTab(
+                        tab, tab == selected, badge = if (tab == Tab.you) model.unreadNoticesCount + model.unreadNotesCount else 0,
+                        onPlaced = { x, w -> bounds[tab] = x to w },
+                        onClick = { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); onSelect(tab) },
+                        onLongClick = if (tab == Tab.you) ({ haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongPressYou() }) else null,
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NavBarTab(tab: Tab, isSelected: Boolean, badge: Int, onPlaced: (Float, Float) -> Unit, onClick: () -> Unit, onLongClick: (() -> Unit)?) {
+    val scope = rememberCoroutineScope()
+    val reduced = Theme.reducedMotion
+    val spring = Theme.motion.defaultSpatialSpec<Float>()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, Theme.motion.fastSpatialSpec(), label = "press")
+    val color by animateColorAsState(if (isSelected) Theme.scheme.onPrimary else Theme.scheme.onSurfaceVariant, Theme.motion.defaultEffectsSpec(), label = "tabColor")
+    // La scheda scivola dal posto di prima a quello nuovo (FLIP).
+    val shift = remember { Animatable(0f) }
+    var lastX by remember { mutableStateOf<Float?>(null) }
+    // L'icona della scheda aperta occupa subito il suo posto e compare ingrandendosi.
+    val icon = remember { Animatable(if (isSelected) 1f else 0f) }
+    LaunchedEffect(isSelected) {
+        if (!isSelected) icon.snapTo(0f)
+        else if (reduced) icon.snapTo(1f)
+        else {
+            icon.snapTo(0f)
+            icon.animateTo(1f, spring)
+        }
+    }
+    Row(
+        Modifier
+            .onPlaced { c ->
+                val x = c.positionInParent().x
+                val old = lastX
+                lastX = x
+                onPlaced(x, c.size.width.toFloat())
+                if (old != null && abs(old - x) > 0.5f && !reduced) {
+                    scope.launch {
+                        shift.snapTo(shift.value + old - x)
+                        shift.animateTo(0f, spring)
+                    }
+                }
+            }
+            .graphicsLayer {
+                translationX = shift.value
+                scaleX = scale
+                scaleY = scale
+            }
+            .height(44.dp).clip(RoundedCornerShape(22.dp))
+            .combinedClickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(), onLongClick = onLongClick, onClick = onClick)
+            .padding(horizontal = if (isSelected) 16.dp else 13.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (isSelected) {
+            Icon(tab.iconSelected, size = 20.dp, tint = color, modifier = Modifier.graphicsLayer {
+                alpha = icon.value.coerceIn(0f, 1f)
+                val s = 0.4f + 0.6f * icon.value
+                scaleX = s
+                scaleY = s
+            })
+        }
+        Text(tab.title, style = Theme.type.style(14, if (isSelected) 650 else 550), color = color, maxLines = 1)
+        if (badge > 0) Badge(containerColor = Theme.scheme.error) { Text(badge.toString()) }
     }
 }
 

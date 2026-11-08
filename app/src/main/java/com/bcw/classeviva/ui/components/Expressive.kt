@@ -513,15 +513,17 @@ fun Stepper(value: String, onMinus: () -> Unit, onPlus: () -> Unit, canMinus: Bo
 
 /** Scelta da un elenco: un pulsante che apre un menu. */
 @Composable
-fun <T> SelectButton(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, maxLines: Int = 1) {
+fun <T> SelectButton(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, maxLines: Int = 1, alignEnd: Boolean = false) {
     var open by remember { mutableStateOf(false) }
     val current = options.firstOrNull { it.first == selected }?.second ?: ""
-    Box(modifier) {
+    // Con `alignEnd` il valore sta a destra dello spazio che ha (come i valori delle righe dei moduli).
+    Box(modifier, contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.TopStart) {
         Row(
             Modifier.clip(RoundedCornerShape(Theme.radii.s)).clickable { open = true }.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(current, style = Theme.type.style(14, 550), color = Theme.scheme.primary, maxLines = maxLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(current, style = Theme.type.style(14, 550), color = Theme.scheme.primary, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+                textAlign = if (alignEnd) TextAlign.End else TextAlign.Start, modifier = Modifier.weight(1f, fill = false))
             Icon("chevronUpDown", size = 18.dp, tint = Theme.scheme.primary)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(Theme.radii.l)) {

@@ -2,7 +2,10 @@ package com.bcw.classeviva.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.draw.drawWithContent
@@ -129,10 +132,22 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
     }
 }
 
+/** Durata e curva del cerchio, come `revealTheme` del web. */
+private const val REVEAL_DURATION = 1150
+private val revealEasing = CubicBezierEasing(0.42f, 0f, 0.18f, 1f)
+
+/** Opacità dell'anello lungo il cerchio: compare, resta un po' e svanisce (come sul web). */
+private fun ringAlpha(t: Float): Float = when {
+    t < 0.12f -> 0.5f * t / 0.12f
+    t < 0.6f -> 0.5f - 0.2f * (t - 0.12f) / 0.48f
+    else -> 0.3f * (1f - (t - 0.6f) / 0.4f)
+}.coerceIn(0f, 1f)
+
 /**
  * Il cambio di tema con un cerchio (come `revealTheme` del web): si fotografa la schermata con i
  * colori di prima, si applica il cambio e la foto si apre con un cerchio che si allarga dal punto
- * toccato. Con le animazioni ridotte il cambio è immediato.
+ * toccato. Sul bordo un anello del nuovo colore primario separa il dentro dal fuori: nasce spesso e
+ * si assottiglia allargandosi. Con le animazioni ridotte il cambio è immediato.
  */
 @Composable
 private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Unit) {
@@ -141,7 +156,8 @@ private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Un
     val reduced = Theme.reducedMotion
     var snapshot by remember { mutableStateOf<ImageBitmap?>(null) }
     var center by remember { mutableStateOf(Offset.Zero) }
-    val radius = remember { Animatable(0f) }
+    var far by remember { mutableFloatStateOf(0f) }
+    val progress = remember { Animatable(0f) }
     SideEffect {
         ui.revealer = { point, change ->
             if (reduced || snapshot != null) change()
@@ -153,12 +169,12 @@ private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Un
                 }
                 val c = point ?: Offset(image.width / 2f, image.height / 2f)
                 center = c
-                radius.snapTo(0f)
+                far = listOf(Offset.Zero, Offset(image.width.toFloat(), 0f), Offset(0f, image.height.toFloat()), Offset(image.width.toFloat(), image.height.toFloat()))
+                    .maxOf { (it - c).getDistance() }
+                progress.snapTo(0f)
                 snapshot = image
                 change()
-                val far = listOf(Offset.Zero, Offset(image.width.toFloat(), 0f), Offset(0f, image.height.toFloat()), Offset(image.width.toFloat(), image.height.toFloat()))
-                    .maxOf { (it - c).getDistance() }
-                radius.animateTo(far, tween(650, easing = FastOutSlowInEasing))
+                progress.animateTo(1f, tween(REVEAL_DURATION, easing = LinearEasing))
                 snapshot = null
             }
         }
@@ -171,9 +187,16 @@ private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Un
         content = content,
     )
     snapshot?.let { image ->
+        val ring = Theme.scheme.primary
         Canvas(Modifier.fillMaxSize()) {
-            val hole = Path().apply { addOval(Rect(center, radius.value)) }
+            val t = progress.value
+            val eased = revealEasing.transform(t)
+            val radius = 0.5f + eased * (far + 8.dp.toPx())
+            val hole = Path().apply { addOval(Rect(center, radius)) }
             clipPath(hole, ClipOp.Difference) { drawImage(image) }
+            // Il tratto è centrato sul bordo del cerchio: metà sopra la schermata di prima, metà sopra la nuova.
+            val width = (26f + (2f - 26f) * eased).dp.toPx()
+            drawCircle(ring.copy(alpha = ringAlpha(t)), radius, center, style = Stroke(width))
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.bcw.classeviva.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -77,6 +78,15 @@ import com.bcw.classeviva.ui.shell.Transitions
 import com.bcw.classeviva.ui.shell.block
 import com.bcw.classeviva.ui.theme.Theme
 import java.time.LocalDate
+import androidx.compose.animation.core.animate
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Stato del giorno scelto con il verso dell'ultimo cambio (per l'asse condiviso). */
 class DaySelection(initial: LocalDate) {
@@ -102,27 +112,77 @@ fun rememberDaySelection(initial: () -> LocalDate): DaySelection {
 }
 
 /**
- * Scorrere di lato sul contenuto cambia giorno (non sopra elementi che scorrono di lato). Il gesto
- * usa sempre l'ultimo `onSwipe`, che calcola dal giorno scelto in quel momento.
+ * Il giorno che segue il dito (come `data-day-swipe` del web): mentre si trascina il contenuto del
+ * giorno si sposta con il dito; lasciando oltre il 30% della larghezza (contando la velocità) il
+ * giorno cambia e la pagina di prima esce da dove l'ha lasciata il dito, altrimenti torna al suo
+ * posto con la molla.
  */
+@Stable
+class DaySwipeState {
+    /** Spostamento del giorno in vista mentre si trascina. */
+    var offset by mutableFloatStateOf(0f)
+        internal set
+    /** Dove il dito ha lasciato la pagina che esce. */
+    var release by mutableFloatStateOf(0f)
+        internal set
+    internal var settle: Job? = null
+}
+
 @Composable
-fun Modifier.daySwipe(onSwipe: (Int) -> Unit): Modifier {
+fun rememberDaySwipeState() = remember { DaySwipeState() }
+
+/** Scorrere di lato sul contenuto cambia giorno (non sopra elementi che scorrono di lato). */
+@Composable
+fun Modifier.daySwipe(state: DaySwipeState, onSwipe: (Int) -> Unit): Modifier {
     val current by rememberUpdatedState(onSwipe)
-    return pointerInput(Unit) {
+    val scope = rememberCoroutineScope()
+    val back = Theme.motion.defaultSpatialSpec<Float>()
+    return pointerInput(state) {
+        val tracker = VelocityTracker()
         var total = 0f
+        fun settleBack() {
+            state.settle?.cancel()
+            state.settle = scope.launch { animate(state.offset, 0f, animationSpec = back) { value, _ -> state.offset = value } }
+        }
         detectHorizontalDragGestures(
-            onDragStart = { total = 0f },
+            onDragStart = {
+                state.settle?.cancel()
+                total = state.offset
+                tracker.resetTracking()
+            },
             onDragEnd = {
-                if (kotlin.math.abs(total) > 90) current(if (total < 0) 1 else -1)
+                val velocity = tracker.calculateVelocity().x
+                if (kotlin.math.abs(total + 0.15f * velocity) > size.width * 0.3f) {
+                    // La pagina che esce parte da dove l'ha lasciata il dito; la nuova entra al suo posto.
+                    state.release = state.offset
+                    state.offset = 0f
+                    current(if (total < 0) 1 else -1)
+                    state.settle = scope.launch {
+                        delay(600)
+                        state.release = 0f
+                    }
+                } else settleBack()
                 total = 0f
             },
-            onDragCancel = { total = 0f },
+            onDragCancel = {
+                total = 0f
+                settleBack()
+            },
         ) { change, amount ->
             total += amount
+            tracker.addPosition(change.uptimeMillis, change.position)
             change.consume()
+            state.offset = total
         }
     }
 }
+
+/**
+ * Lo spostamento del giorno dentro l'animazione del cambio: quello in vista segue il dito, quello
+ * che esce resta dove il dito l'ha lasciato mentre scivola via.
+ */
+fun Modifier.daySwipeOffset(state: DaySwipeState, exiting: Boolean): Modifier =
+    graphicsLayer { translationX = if (exiting) state.release else state.offset }
 
 /**
  * Dashboard: compiti, verifiche ed eventi del giorno scelto (di default domani), con la settimana o
@@ -148,6 +208,7 @@ private fun DashboardContent() {
     val prefs = model.preferences
     val haptics = LocalHapticFeedback.current
     val selection = rememberDaySelection { Dates.today().plusDays(1) }
+    val swipe = rememberDaySwipeState()
     val mode = prefs.dashboardMode
     val month = mode == DashboardMode.calendar
     var picking by remember { mutableStateOf(false) }
@@ -202,14 +263,16 @@ private fun DashboardContent() {
         },
         onRefresh = { model.refreshAll() },
         onReselect = { select(Dates.today().plusDays(1)) },
-        listModifier = Modifier.daySwipe { select(day.plusDays(it.toLong())) },
+        listModifier = Modifier.daySwipe(swipe) { select(day.plusDays(it.toLong())) },
         gap = 20.dp,
     ) {
         model.lastError?.let { error -> block("banner") { StatusBanner(error, if (model.isOffline) "wifiOff" else "alertTriangle") } }
         block("day") {
             AnimatedContent(day, transitionSpec = { Transitions.sharedAxisX(selection.dir, reduced) }, label = "day") { shown ->
-                DayDetail(shown, jump = if (Dates.isTomorrow(shown)) null else DayJump("Domani") { select(Dates.today().plusDays(1)) },
-                    expanded = expanded, onExpandedChange = { expanded = it })
+                Box(Modifier.daySwipeOffset(swipe, exiting = transition.targetState == EnterExitState.PostExit)) {
+                    DayDetail(shown, jump = if (Dates.isTomorrow(shown)) null else DayJump("Domani") { select(Dates.today().plusDays(1)) },
+                        expanded = expanded, onExpandedChange = { expanded = it })
+                }
             }
         }
         if (prefs.showUpcomingDays && mode == DashboardMode.list) {
