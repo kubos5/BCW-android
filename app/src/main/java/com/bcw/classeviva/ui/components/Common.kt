@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.data.AgendaEvent
 import com.bcw.classeviva.data.AgendaKind
-import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.util.Dates
 import com.bcw.classeviva.util.Fmt
 import com.bcw.classeviva.ui.icons.Icon
@@ -34,7 +33,10 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /** Voce di un menu: `null` come etichetta = separatore. */
-data class MenuItem(val label: String, val icon: String? = null, val checked: Boolean? = null, val destructive: Boolean = false, val run: () -> Unit)
+data class MenuItem(
+    val label: String, val icon: String? = null, val checked: Boolean? = null, val destructive: Boolean = false,
+    val enabled: Boolean = true, val subtitle: String? = null, val run: () -> Unit,
+)
 
 @Composable
 fun BCWMenu(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem?>, sections: Map<Int, String> = emptyMap()) {
@@ -47,8 +49,14 @@ fun BCWMenu(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem?>, se
                 androidx.compose.material3.HorizontalDivider(modifier = androidx.compose.ui.Modifier.padding(vertical = 4.dp))
             } else {
                 DropdownMenuItem(
-                    text = { Text(item.label, color = if (item.destructive) Theme.scheme.error else Theme.scheme.onSurface) },
+                    text = {
+                        androidx.compose.foundation.layout.Column {
+                            Text(item.label, color = if (item.destructive) Theme.scheme.error else Theme.scheme.onSurface)
+                            item.subtitle?.let { Text(it, style = Theme.type.style(12), color = Theme.scheme.onSurfaceVariant) }
+                        }
+                    },
                     onClick = { onDismiss(); item.run() },
+                    enabled = item.enabled,
                     leadingIcon = item.icon?.let { { Icon(it, size = 22.dp, tint = if (item.destructive) Theme.scheme.error else Theme.scheme.onSurfaceVariant) } },
                     trailingIcon = if (item.checked == true) ({ Icon("check", size = 20.dp, tint = Theme.scheme.primary) }) else null,
                 )
@@ -150,6 +158,3 @@ fun DatePickerSheet(
         DatePicker(state = state)
     }
 }
-
-@Suppress("unused")
-fun AppModel.noop() = Unit

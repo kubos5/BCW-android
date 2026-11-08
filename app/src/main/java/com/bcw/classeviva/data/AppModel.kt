@@ -185,6 +185,21 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
     private val cloudActiveKey = "activeCloudAccount"
     private val demoKey = "demoMode"
 
+    private val onboardingKey = "onboardingCompleted"
+
+    /**
+     * Prima apertura: nessuna introduzione finita e nessun segno che BCW fosse già in uso
+     * (account salvati, account BCW, demo). Chi aggiorna l'app non la vede.
+     */
+    fun isFirstRun(): Boolean {
+        if (defaults.getBoolean(onboardingKey, false)) return false
+        val first = secure.get(localAccountsKey) == null && secure.get(sessionKey) == null && !defaults.getBoolean(demoKey, false)
+        if (!first) markOnboardingCompleted()
+        return first
+    }
+
+    fun markOnboardingCompleted() = defaults.edit().putBoolean(onboardingKey, true).apply()
+
     private fun readSession(): BCWSession? {
         val text = secure.get(sessionKey) ?: return null
         return parseSession(parseJson(text) as? JsonObject)

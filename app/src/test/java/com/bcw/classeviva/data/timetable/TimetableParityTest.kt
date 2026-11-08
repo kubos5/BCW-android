@@ -5,7 +5,6 @@ import com.bcw.classeviva.data.parseLessonsResponse
 import com.bcw.classeviva.util.Dates
 import com.bcw.classeviva.util.parseJson
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject

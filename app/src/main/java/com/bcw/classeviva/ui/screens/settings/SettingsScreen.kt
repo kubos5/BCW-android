@@ -48,6 +48,7 @@ import com.bcw.classeviva.data.DashboardMode
 import com.bcw.classeviva.data.NewsKind
 import com.bcw.classeviva.data.SyncCategory
 import com.bcw.classeviva.data.TitleAbbreviation
+import com.bcw.classeviva.data.Preferences
 import com.bcw.classeviva.data.timetable.Alignment as TTAlignment
 import com.bcw.classeviva.platform.Platform
 import com.bcw.classeviva.util.GradeFormat
@@ -56,6 +57,7 @@ import com.bcw.classeviva.ui.components.Cell
 import com.bcw.classeviva.ui.components.FormIcon
 import com.bcw.classeviva.ui.components.IconBadge
 import com.bcw.classeviva.ui.components.ListGroup
+import com.bcw.classeviva.ui.components.ListGroupScope
 import com.bcw.classeviva.ui.components.ListRow
 import com.bcw.classeviva.ui.components.NavigationRow
 import com.bcw.classeviva.ui.components.SelectButton
@@ -177,7 +179,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
     }
     block("onboarding") {
         val ui = LocalUi.current
-        ListGroup { item { ButtonRow("Rivedi l'introduzione", "sparkles", { ui.onboarding = true }) } }
+        ListGroup { item { ButtonRow("Rivedi l'introduzione", "sparkles", { ui.presentOnboarding() }) } }
     }
     block("github") {
         val ui = LocalUi.current
@@ -247,41 +249,73 @@ private fun AppearancePane() {
                 AccentPicker(p.string("accentColor"), ColorStyle.entries.firstOrNull { it.name == p.string("colorStyle") } ?: ColorStyle.tonalSpot, dark,
                     enabled = !dynamic, onPick = { p.set("accentColor", it) }, onCustom = { picking = true })
             }
-            item {
-                val style = ColorStyle.entries.firstOrNull { it.name == p.string("colorStyle") } ?: ColorStyle.tonalSpot
-                ListRow("Stile dei colori", subtitle = style.subtitle, leading = { FormIcon("colorStyle") }, enabled = !dynamic, trailing = {
-                    SelectButton(ColorStyle.entries.map { it to it.title }, style, { p.set("colorStyle", it.name) })
-                })
-            }
-            item {
-                ListRow("Contrasto", leading = { FormIcon("contrast") }, enabled = !dynamic, trailing = {
-                    SelectButton(ContrastLevel.entries.map { it to it.title }, ContrastLevel.entries.firstOrNull { it.name == p.string("contrast") } ?: ContrastLevel.standard, { p.set("contrast", it.name) })
-                })
-            }
+            colorStyleRow(p, enabled = !dynamic)
+            contrastRow(p, enabled = !dynamic)
         }
         ListGroup(
             header = "Forme e movimento",
             footer = "Espressive: animazioni a molla con un piccolo rimbalzo, come in Material 3 Expressive. Standard: senza rimbalzo. Ridotte: brevi e senza movimenti ampi. I caratteri arrotondati usano l'asse ROND di Google Sans Flex.",
         ) {
-            item {
-                ListRow("Angoli", leading = { FormIcon("corners") }, trailing = {
-                    SelectButton(CornerStyle.entries.map { it to it.title }, CornerStyle.entries.firstOrNull { it.name == p.string("corners") } ?: CornerStyle.standard, { p.set("corners", it.name) })
-                })
-            }
-            item {
-                ListRow("Animazioni", leading = { FormIcon("motion") }, trailing = {
-                    SelectButton(MotionStyle.entries.map { it to it.title }, MotionStyle.entries.firstOrNull { it.name == p.string("motion") } ?: MotionStyle.expressive, { p.set("motion", it.name) })
-                })
-            }
-            item {
-                ListRow("Caratteri arrotondati", leading = { FormIcon("textStyle") }, trailing = {
-                    SelectButton(RoundedText.entries.map { it to it.title }, RoundedText.entries.firstOrNull { it.name == p.string("roundedText") } ?: RoundedText.titles, { p.set("roundedText", it.name) })
-                })
-            }
+            shapeMotionRows(p)
             if (!p.isDefaultAppearance) item { ButtonRow("Ripristina l'aspetto di BCW", "refresh", { p.resetAppearance() }) }
         }
     }
     if (picking) ColorPickerDialog(normalizeHex(p.string("accentColor")) ?: DEFAULT_ACCENT, onDismiss = { picking = false }) { p.set("accentColor", it) }
+}
+
+/** Stile dei colori (Impostazioni › Aspetto e introduzione). */
+fun ListGroupScope.colorStyleRow(p: Preferences, enabled: Boolean = true) = item {
+    val style = ColorStyle.entries.firstOrNull { it.name == p.string("colorStyle") } ?: ColorStyle.tonalSpot
+    ListRow("Stile dei colori", subtitle = style.subtitle, leading = { FormIcon("colorStyle") }, enabled = enabled, trailing = {
+        SelectButton(ColorStyle.entries.map { it to it.title }, style, { p.set("colorStyle", it.name) })
+    })
+}
+
+/** Contrasto tra i colori (Impostazioni › Aspetto e introduzione). */
+fun ListGroupScope.contrastRow(p: Preferences, enabled: Boolean = true) = item {
+    ListRow("Contrasto", leading = { FormIcon("contrast") }, enabled = enabled, trailing = {
+        SelectButton(ContrastLevel.entries.map { it to it.title }, ContrastLevel.entries.firstOrNull { it.name == p.string("contrast") } ?: ContrastLevel.standard, { p.set("contrast", it.name) })
+    })
+}
+
+/** Angoli, animazioni e caratteri arrotondati (Impostazioni › Aspetto e introduzione). */
+fun ListGroupScope.shapeMotionRows(p: Preferences) {
+    item {
+        ListRow("Angoli", leading = { FormIcon("corners") }, trailing = {
+            SelectButton(CornerStyle.entries.map { it to it.title }, CornerStyle.entries.firstOrNull { it.name == p.string("corners") } ?: CornerStyle.standard, { p.set("corners", it.name) })
+        })
+    }
+    item {
+        ListRow("Animazioni", leading = { FormIcon("motion") }, trailing = {
+            SelectButton(MotionStyle.entries.map { it to it.title }, MotionStyle.entries.firstOrNull { it.name == p.string("motion") } ?: MotionStyle.expressive, { p.set("motion", it.name) })
+        })
+    }
+    item {
+        ListRow("Caratteri arrotondati", leading = { FormIcon("textStyle") }, trailing = {
+            SelectButton(RoundedText.entries.map { it to it.title }, RoundedText.entries.firstOrNull { it.name == p.string("roundedText") } ?: RoundedText.titles, { p.set("roundedText", it.name) })
+        })
+    }
+}
+
+/**
+ * Chiede il permesso delle notifiche (Android 13 e successivi) prima di `action`; senza permesso
+ * lo dice con un avviso.
+ */
+@Composable
+fun rememberNotificationPermission(): (action: () -> Unit) -> Unit {
+    val ui = LocalUi.current
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) pending?.invoke() else ui.toast("Senza il permesso BCW non può mostrare notifiche.")
+        pending = null
+    }
+    return { action ->
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            pending = action
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else action()
+    }
 }
 
 /** Piccola anteprima dei componenti con i colori e le forme scelti. */
@@ -357,7 +391,7 @@ private fun Swatch(hex: String, style: ColorStyle, dark: Boolean, selected: Bool
 
 /** Un colore qualsiasi: tonalità, croma e tono (HCT, come i colori di Material) o il codice esadecimale. */
 @Composable
-fun ColorPickerDialog(initial: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+fun ColorPickerDialog(initial: String, onDismiss: () -> Unit, title: String = "Colore d'accento", confirmLabel: String = "Usa questo colore", onPick: (String) -> Unit) {
     val hct = remember { Hct.fromInt(argbFromHex(initial)) }
     var hue by remember { mutableFloatStateOf(hct.hue.toFloat()) }
     var chroma by remember { mutableFloatStateOf(hct.chroma.toFloat().coerceAtMost(120f)) }
@@ -366,7 +400,7 @@ fun ColorPickerDialog(initial: String, onDismiss: () -> Unit, onPick: (String) -
     val argb = Hct.from(hue.toDouble(), chroma.toDouble(), toneValue.toDouble()).toInt()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Colore d'accento") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).size(64.dp).clip(RoundedCornerShape(Theme.radii.l)).background(Color(argb)))
@@ -385,7 +419,7 @@ fun ColorPickerDialog(initial: String, onDismiss: () -> Unit, onPick: (String) -
                 }, label = { Text("Codice") }, singleLine = true)
             }
         },
-        confirmButton = { Button(onClick = { onPick(hexFromArgb(argb)); onDismiss() }) { Text("Usa questo colore") } },
+        confirmButton = { Button(onClick = { onPick(hexFromArgb(argb)); onDismiss() }) { Text(confirmLabel) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
     )
 }
@@ -485,17 +519,7 @@ private fun NotificationsPane() {
     val ui = LocalUi.current
     val context = LocalContext.current
     val p = model.preferences
-    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) pending?.invoke() else ui.toast("Senza il permesso BCW non può mostrare notifiche.")
-        pending = null
-    }
-    fun withPermission(action: () -> Unit) {
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            pending = action
-            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else action()
-    }
+    val withPermission = rememberNotificationPermission()
     val hours = (14..22).map { it to "$it:00" }
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
         ListGroup(header = "Promemoria", footer = "Ricevi una notifica la sera prima di ogni compito o verifica. I compiti segnati come fatti vengono saltati. Puoi anche esportare l'agenda nel calendario: ogni compito e verifica avrà un avviso all'orario scelto.") {

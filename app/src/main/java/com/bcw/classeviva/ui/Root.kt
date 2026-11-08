@@ -1,6 +1,19 @@
 package com.bcw.classeviva.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -42,7 +55,6 @@ import com.bcw.classeviva.ui.components.ListGroup
 import com.bcw.classeviva.ui.nav.Navigator
 import com.bcw.classeviva.ui.screens.login.AddAccountSheet
 import com.bcw.classeviva.ui.screens.login.LoginScreen
-import com.bcw.classeviva.ui.screens.onboarding.Onboarding
 import com.bcw.classeviva.ui.screens.onboarding.OnboardingScreen
 import com.bcw.classeviva.ui.screens.settings.AccountsSection
 import com.bcw.classeviva.ui.shell.LocalModel
@@ -70,9 +82,14 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
     val scope = rememberCoroutineScope()
     val ui = remember { UiController(context, scope) }
     val navigator = remember { Navigator() }
-    val onboardingFirstRun = remember { Onboarding.isFirstRun(context, model) }
-    LaunchedEffect(Unit) { if (onboardingFirstRun) ui.onboarding = true }
-    val settings = ThemeSettings.from(model.preferences).copy(monochrome = ui.onboarding && Onboarding.monochrome)
+    // Alla prima apertura l'introduzione parte in bianco e nero, già dal primo disegno.
+    remember {
+        if (model.isFirstRun()) {
+            ui.monochrome = true
+            ui.onboarding = true
+        }
+    }
+    val settings = ThemeSettings.from(model.preferences).copy(monochrome = ui.onboarding && ui.monochrome)
     // Memoria delle pagine per sessione (account o demo): cambiando sessione si azzera.
     val sessionKey = "${model.isDemo}-${model.activeAccountID}-${model.cloud?.user?.id}"
     val memory = remember(sessionKey) { ScreenMemory() }
@@ -82,7 +99,7 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
         val dark = Theme.isDark
         LaunchedEffect(dark) { onSystemBars(dark) }
         CompositionLocalProvider(LocalModel provides model, LocalUi provides ui, LocalNavigator provides navigator, LocalScreenMemory provides memory) {
-            Box(Modifier.fillMaxSize().background(Theme.scheme.surface)) {
+            ThemeReveal(ui) {
                 val alpha by animateFloatAsState(if (model.isChangingSession) 0f else 1f, tween(if (model.isChangingSession) 180 else 260), label = "session")
                 val reduced = Theme.reducedMotion
                 AnimatedContent(model.phase, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "phase", modifier = Modifier.alpha(alpha)) { phase ->
@@ -92,11 +109,58 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
                         Phase.signedIn -> MainShell()
                     }
                 }
-                if (ui.onboarding) OnboardingScreen(onFinish = { ui.onboarding = false })
+                if (ui.onboarding) OnboardingScreen()
                 Overlays()
                 SnackbarHost(ui.snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
                 if (lock.locked) LockScreen(onUnlock)
             }
+        }
+    }
+}
+
+/**
+ * Il cambio di tema con un cerchio (come `revealTheme` del web): si fotografa la schermata con i
+ * colori di prima, si applica il cambio e la foto si apre con un cerchio che si allarga dal punto
+ * toccato. Con le animazioni ridotte il cambio è immediato.
+ */
+@Composable
+private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Unit) {
+    val layer = rememberGraphicsLayer()
+    val scope = rememberCoroutineScope()
+    val reduced = Theme.reducedMotion
+    var snapshot by remember { mutableStateOf<ImageBitmap?>(null) }
+    var center by remember { mutableStateOf(Offset.Zero) }
+    val radius = remember { Animatable(0f) }
+    ui.revealer = { point, change ->
+        if (reduced || snapshot != null) change()
+        else scope.launch {
+            val image = runCatching { layer.toImageBitmap() }.getOrNull()
+            if (image == null) {
+                change()
+                return@launch
+            }
+            val c = point ?: Offset(image.width / 2f, image.height / 2f)
+            center = c
+            radius.snapTo(0f)
+            snapshot = image
+            change()
+            val far = listOf(Offset.Zero, Offset(image.width.toFloat(), 0f), Offset(0f, image.height.toFloat()), Offset(image.width.toFloat(), image.height.toFloat()))
+                .maxOf { (it - c).getDistance() }
+            radius.animateTo(far, tween(650, easing = FastOutSlowInEasing))
+            snapshot = null
+        }
+    }
+    Box(
+        Modifier.fillMaxSize().background(Theme.scheme.surface).drawWithContent {
+            layer.record { this@drawWithContent.drawContent() }
+            drawLayer(layer)
+        },
+        content = content,
+    )
+    snapshot?.let { image ->
+        Canvas(Modifier.fillMaxSize()) {
+            val hole = Path().apply { addOval(Rect(center, radius.value)) }
+            clipPath(hole, ClipOp.Difference) { drawImage(image) }
         }
     }
 }

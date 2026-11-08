@@ -134,6 +134,8 @@ class Preferences(private val store: SharedPreferences) {
     val titleAbbreviation: TitleAbbreviation get() = runCatching { TitleAbbreviation.valueOf(string("titleAbbreviation")) }.getOrDefault(TitleAbbreviation.automatic)
     val hideCompletedHomework: Boolean get() = bool("hideCompletedHomework")
     val showUpcomingDays: Boolean get() = bool("showUpcomingDays")
+    val timetableMode: com.bcw.classeviva.data.timetable.TimetableMode
+        get() = if (string("timetableMode") == "day") com.bcw.classeviva.data.timetable.TimetableMode.day else com.bcw.classeviva.data.timetable.TimetableMode.list
     val timetableShowsTests: Boolean get() = bool("timetableShowsTests")
     val timetableShowsNowCard: Boolean get() = bool("timetableShowsNowCard")
     val showsTimetableTab: Boolean get() = bool("showsTimetableTab")

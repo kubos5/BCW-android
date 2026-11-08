@@ -11,7 +11,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -54,10 +53,8 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.ui.icons.Icon
-import com.bcw.classeviva.ui.nav.Page
 import com.bcw.classeviva.ui.nav.Tab
 import com.bcw.classeviva.ui.screens.PageContent
 import com.bcw.classeviva.ui.theme.Theme
@@ -227,6 +224,3 @@ fun HidesNavigationBar(active: Boolean = true) {
         onDispose { if (active) shell.barHiders -= 1 }
     }
 }
-
-@Suppress("unused")
-private val unusedDp: Dp = 0.dp

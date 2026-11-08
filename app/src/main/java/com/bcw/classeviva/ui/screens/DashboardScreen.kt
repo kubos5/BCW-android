@@ -37,7 +37,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.bcw.classeviva.data.AbsenceKind
 import com.bcw.classeviva.data.AgendaKind
 import com.bcw.classeviva.data.DashboardMode
 import com.bcw.classeviva.data.TitleAbbreviation

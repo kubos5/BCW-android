@@ -38,7 +38,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.data.AgendaKind
 import com.bcw.classeviva.data.AppModel
@@ -220,6 +219,3 @@ fun CalendarBar(
         }
     }
 }
-
-@Suppress("unused")
-private val unusedDp: Dp = 0.dp

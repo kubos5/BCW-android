@@ -398,10 +398,10 @@ fun SegmentedSection(
 
 /** Barra di avanzamento lineare e ondulata di M3 Expressive. */
 @Composable
-fun WavyProgress(value: Float, modifier: Modifier = Modifier, color: Color = Theme.scheme.primary) {
+fun WavyProgress(value: Float, modifier: Modifier = Modifier, color: Color = Theme.scheme.primary, trackColor: Color = Theme.scheme.secondaryContainer) {
     val p = value.coerceIn(0f, 1f)
     val animated by animateFloatAsState(p, Theme.motion.defaultSpatialSpec(), label = "progress")
-    LinearWavyProgressIndicator(progress = { animated }, modifier = modifier, color = color, trackColor = Theme.scheme.secondaryContainer)
+    LinearWavyProgressIndicator(progress = { animated }, modifier = modifier, color = color, trackColor = trackColor)
 }
 
 /** Anello che si riempie in proporzione alla media (su 10), ondulato, con la media al centro. */

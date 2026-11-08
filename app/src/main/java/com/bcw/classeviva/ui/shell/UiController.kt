@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.geometry.Offset
 import java.io.File
 
 /** Un'azione di un dialogo di conferma. */
@@ -45,6 +46,10 @@ class UiController(val context: Context, val scope: CoroutineScope) {
     var addAccount by mutableStateOf(false)
     /** Introduzione aperta (prima apertura o "Rivedi l'introduzione"). */
     var onboarding by mutableStateOf(false)
+    /** BCW in bianco e nero durante l'introduzione, finché non si sceglie un colore. */
+    var monochrome by mutableStateOf(false)
+    /** Cambia il tema con un cerchio che si allarga da un punto (lo imposta `BCWRoot`). */
+    internal var revealer: (Offset?, () -> Unit) -> Unit = { _, change -> change() }
     /** Account del dispositivo da abbinare dopo l'accesso all'account BCW. */
     var linkCandidates by mutableStateOf<List<com.bcw.classeviva.data.SavedAccount>>(emptyList())
 
@@ -56,6 +61,18 @@ class UiController(val context: Context, val scope: CoroutineScope) {
     }
 
     fun ask(request: ConfirmRequest) { confirm = request }
+
+    /** Applica `change` (colori, tema chiaro o scuro): i nuovi colori arrivano con un cerchio da `center`. */
+    fun reveal(center: Offset?, change: () -> Unit) = revealer(center, change)
+
+    /** Riapre l'introduzione dalle Impostazioni: un cerchio svuota BCW dei colori e sotto c'è l'introduzione. */
+    fun presentOnboarding() {
+        if (onboarding) return
+        reveal(null) {
+            monochrome = true
+            onboarding = true
+        }
+    }
 
     fun ask(title: String, message: String?, confirmLabel: String, destructive: Boolean = false, onConfirm: () -> Unit) {
         confirm = ConfirmRequest(title, message, DialogAction(confirmLabel, destructive, onConfirm))

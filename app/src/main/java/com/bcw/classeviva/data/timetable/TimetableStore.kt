@@ -21,7 +21,7 @@ import java.time.LocalDate
 import java.util.Base64
 
 /** Bozza generata dalle lezioni, in anteprima finché non viene applicata o scartata. */
-data class TimetableDraft(val entries: List<TimetableEntry>, val settings: GenerationSettings, val analyzedDays: Int)
+data class TimetableDraft(val entries: List<TimetableEntry>, val settings: GenerationSettings, val analyzedDays: Int, val from: LocalDate? = null, val to: LocalDate? = null)
 
 /** Dove vale una nota, un file o una verifica: un solo giorno, ogni settimana o tutti gli eventi uguali. */
 sealed class EditScope {

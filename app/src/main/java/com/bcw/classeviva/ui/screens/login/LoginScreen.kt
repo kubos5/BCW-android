@@ -84,7 +84,7 @@ fun LoginContent(adding: Boolean, onDone: () -> Unit) {
     val model = LocalModel.current
     val ui = LocalUi.current
     val linkingFirst = !adding && model.isCloud && model.phase == Phase.signedOut
-    var mode by rememberSaveable { mutableStateOf(if (adding || linkingFirst) "classeviva" else "classeviva") }
+    var mode by rememberSaveable { mutableStateOf("classeviva") }
     var register by rememberSaveable { mutableStateOf(false) }
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val compact = keyboardOpen && !adding
@@ -134,7 +134,7 @@ private fun LoginArt() {
 }
 
 @Composable
-private fun ErrorBox(text: String) {
+internal fun ErrorBox(text: String) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(Theme.radii.l)).background(Theme.colors.poor.container).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -160,7 +160,7 @@ private fun Field(value: String, onChange: (String) -> Unit, placeholder: String
 }
 
 @Composable
-private fun ClassevivaForm(adding: Boolean, onDone: () -> Unit) {
+internal fun ClassevivaForm(adding: Boolean, onDone: () -> Unit, onDemo: () -> Unit = {}) {
     val model = LocalModel.current
     val scope = rememberCoroutineScope()
     var username by rememberSaveable { mutableStateOf("") }
@@ -196,7 +196,7 @@ private fun ClassevivaForm(adding: Boolean, onDone: () -> Unit) {
             if (busy) LoadingIndicator(Modifier.size(28.dp), color = Theme.scheme.onPrimary) else Text("Accedi", style = Theme.type.style(16, 600))
         }
         if (!adding && !model.isCloud) {
-            FilledTonalButton(onClick = { model.startDemo() }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            FilledTonalButton(onClick = { model.startDemo(); onDemo() }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                 Icon("sparkles", size = 18.dp)
                 Text("Prova la demo", modifier = Modifier.padding(start = 8.dp))
             }
@@ -230,7 +230,7 @@ private fun ClassevivaForm(adding: Boolean, onDone: () -> Unit) {
 }
 
 @Composable
-private fun CloudForm(register: Boolean, onToggleRegister: () -> Unit, compact: Boolean, onDone: () -> Unit) {
+internal fun CloudForm(register: Boolean, onToggleRegister: () -> Unit, compact: Boolean, onDone: () -> Unit) {
     val model = LocalModel.current
     val ui = LocalUi.current
     val scope = rememberCoroutineScope()
