@@ -1,6 +1,7 @@
 package com.bcw.classeviva.ui.shell
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import kotlinx.coroutines.CancellationException
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.NavigationRail
@@ -61,6 +66,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.ui.icons.Icon
+import com.bcw.classeviva.ui.nav.Page
 import com.bcw.classeviva.ui.nav.Tab
 import com.bcw.classeviva.ui.screens.PageContent
 import com.bcw.classeviva.ui.theme.Theme
@@ -87,12 +93,83 @@ fun MainShell() {
         nav.select(if (tab == Tab.timetable && Tab.timetable !in tabs) Tab.dashboard else tab)
     }
 
-    BackHandler(enabled = nav.searching || nav.canPop || nav.tab != Tab.dashboard) {
+    // Gesto "indietro" predittivo: il contenuto segue il dito; al rilascio si esegue la stessa azione
+    // del tasto indietro, quindi il cambio di scheda usa la stessa transizione del tocco sulla barra.
+    val backProgress = remember { Animatable(0f) }
+    val backScope = rememberCoroutineScope()
+    val backSpec = Theme.motion.defaultSpatialSpec<Float>()
+    val backEnabled = nav.searching || nav.canPop || nav.tab != Tab.dashboard
+    fun goBack() {
         when {
             nav.searching -> nav.searching = false
             nav.canPop -> nav.pop()
             else -> nav.select(Tab.dashboard)
         }
+    }
+    // Stato del gesto, fissato all'inizio: la pagina sotto e la modalità restano stabili anche
+    // quando il ritorno cambia la pila (altrimenti sparivano di colpo al rilascio).
+    var backGesture by remember { mutableStateOf(false) }
+    var backSlide by remember { mutableStateOf(false) }
+    var peekPage by remember { mutableStateOf<Pair<Int, Page>?>(null) }
+    PredictiveBackHandler(enabled = backEnabled) { events ->
+        try {
+            events.collect { event ->
+                if (!backGesture) {
+                    backSlide = nav.tab == Tab.you && nav.canPop
+                    val stack = nav.stack(nav.tab)
+                    peekPage = if (backSlide) (stack.size - 2) to stack[stack.size - 2] else null
+                    backGesture = true
+                }
+                backProgress.snapTo(event.progress)
+            }
+            // Gesto completato: si esegue l'azione di ritorno e il contenuto torna in posizione
+            // insieme alla transizione delle pagine.
+            goBack()
+            backScope.launch {
+                backProgress.animateTo(0f, backSpec)
+                backGesture = false
+                peekPage = null
+            }
+        } catch (cancelled: CancellationException) {
+            // Gesto annullato: il contenuto torna al suo posto e la pagina sotto scompare.
+            backScope.launch {
+                backProgress.animateTo(0f, backSpec)
+                backGesture = false
+                peekPage = null
+            }
+        }
+    }
+    // La molla di ritorno può superare zero: il progresso va limitato a 0..1 (gli angoli non possono essere negativi).
+    val p = backProgress.value.coerceIn(0f, 1f)
+    // Specifiche di Android (predictive back, "full screen surface"): il progresso non si usa lineare
+    // ma con una curva decelerata (0,0,0,1), così il gesto si vede subito.
+    val e = 1f - (1f - p) * (1f - p)
+    // Nella scheda Tu (e nelle impostazioni, che si aprono da lì) la pagina si restringe a 90% verso
+    // il bordo destro e la pagina precedente entra da 110% a 100%, sfumando dopo il 35% del gesto.
+    // Nelle altre schede il contenuto si rimpicciolisce e si schiarisce.
+    val backModifier = if (backSlide) {
+        Modifier.graphicsLayer {
+            val s = 1f - 0.1f * e
+            scaleX = s
+            scaleY = s
+            transformOrigin = TransformOrigin(1f, 0.5f)
+            clip = p > 0f
+            shape = RoundedCornerShape(32.dp * e)
+        }
+    } else {
+        val s = 1f - 0.08f * p
+        val a = 1f - 0.25f * p
+        Modifier.graphicsLayer { scaleX = s; scaleY = s; alpha = a }
+    }
+
+    // Pagina precedente sotto: entra da 110% a 100% e sfuma dopo il 35% del gesto (come da specifiche).
+    val peekShown = backGesture && backSlide
+    val peekModifier = Modifier.graphicsLayer {
+        val fade = ((p - 0.35f) / 0.65f).coerceIn(0f, 1f)
+        alpha = if (peekShown) fade else 0f
+        val s = 1.1f - 0.1f * e
+        scaleX = s
+        scaleY = s
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Theme.scheme.surface)) {
@@ -116,11 +193,19 @@ fun MainShell() {
                             )
                         }
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight()) { TabsContent() }
+                    Box(Modifier.weight(1f).fillMaxHeight().then(backModifier)) { TabsContent() }
                 }
             } else {
                 Box(Modifier.fillMaxSize()) {
-                    TabsContent()
+                    // La pagina sotto è sempre composta e viva (così al gesto è già pronta e si muove),
+                    // ma è visibile solo durante il gesto.
+                    val liveStack = nav.stack(nav.tab)
+                    val livePeek = if (nav.tab == Tab.you && nav.canPop) (liveStack.size - 2) to liveStack[liveStack.size - 2] else null
+                    TabsContent(
+                        peekPage = if (backGesture) peekPage else livePeek,
+                        underlay = peekModifier,
+                        foreground = Modifier.fillMaxSize().then(backModifier),
+                    )
                     AnimatedVisibility(
                         visible = !shell.hidesBar,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = barBottom),
@@ -146,22 +231,37 @@ private fun TabIcon(tab: Tab, selected: Boolean) {
 
 /** Contenuto delle schede: dissolvenza tra le schede, asse condiviso tra le pagine di una scheda. */
 @Composable
-private fun TabsContent() {
+private fun TabsContent(peekPage: Pair<Int, Page>? = null, underlay: Modifier = Modifier, foreground: Modifier = Modifier) {
     val nav = LocalNavigator.current
     val holder = rememberSaveableStateHolder()
     val reduced = Theme.reducedMotion
-    AnimatedContent(targetState = nav.tab, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "tabs") { tab ->
-        val stack = nav.stack(tab)
-        AnimatedContent(
-            targetState = stack.size - 1 to stack.last(),
-            transitionSpec = { Transitions.sharedAxisX(if (targetState.first >= initialState.first) 1 else -1, reduced) },
-            contentKey = { "${it.first}-${it.second}" },
-            label = "pages",
-        ) { (index, page) ->
-            val key = "${tab.name}/$index/$page"
-            holder.SaveableStateProvider(key) {
-                CompositionLocalProvider(LocalPageContext provides PageContext(tab, nav.tab == tab && index == nav.stack(tab).size - 1, index == 0)) {
-                    PageContent(page)
+    Box(Modifier.fillMaxSize()) {
+        // La pagina precedente sta sotto, viva; durante il gesto è visibile con una velatura.
+        // Ha una chiave sua, diversa da quella della pagina in primo piano, così non si sovrappongono.
+        if (peekPage != null) {
+            val (index, page) = peekPage
+            Box(Modifier.fillMaxSize().then(underlay)) {
+                holder.SaveableStateProvider("peek/${nav.tab.name}/$index/$page") {
+                    CompositionLocalProvider(LocalPageContext provides PageContext(nav.tab, false, index == 0)) {
+                        PageContent(page)
+                    }
+                }
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+            }
+        }
+        AnimatedContent(modifier = foreground, targetState = nav.tab, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "tabs") { tab ->
+            val stack = nav.stack(tab)
+            AnimatedContent(
+                targetState = stack.size - 1 to stack.last(),
+                transitionSpec = { Transitions.sharedAxisX(if (targetState.first >= initialState.first) 1 else -1, reduced) },
+                contentKey = { "${it.first}-${it.second}" },
+                label = "pages",
+            ) { (index, page) ->
+                val key = "${tab.name}/$index/$page"
+                holder.SaveableStateProvider(key) {
+                    CompositionLocalProvider(LocalPageContext provides PageContext(tab, nav.tab == tab && index == nav.stack(tab).size - 1, index == 0)) {
+                        PageContent(page)
+                    }
                 }
             }
         }
