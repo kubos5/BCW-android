@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -380,9 +381,10 @@ private fun Swatch(hex: String, style: ColorStyle, dark: Boolean, selected: Bool
     ) {
         Column(Modifier.matchParentSize()) {
             Box(Modifier.weight(1f).fillMaxWidth().background(colors[0]))
-            Row(Modifier.weight(1f)) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(colors[1]))
-                Box(Modifier.weight(1f).fillMaxWidth().background(colors[2]))
+            // La riga deve riempire l'altezza: senza fillMaxWidth/fillMaxHeight i campioni in basso sono alti 0.
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.weight(1f).fillMaxHeight().background(colors[1]))
+                Box(Modifier.weight(1f).fillMaxHeight().background(colors[2]))
             }
         }
         if (selected) Icon("check", size = 20.dp, tint = Color.White, contentDescription = name)
