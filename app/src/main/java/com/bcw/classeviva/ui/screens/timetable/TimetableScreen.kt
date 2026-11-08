@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -234,6 +235,7 @@ fun TimetableScreen() {
                 Column {
                     CalendarBar(model, day, false, onSelect = ::select, onShift = { select(day.plusDays(7L * it)) }, onPick = { picking = true }, dir = selection.dir)
                     TimetableExtras(store, editing, if (mode == TimetableMode.day && prefs.timetableShowsTests) content.unmatchedTests else emptyList())
+                    if (weekColumns) TimelineDayHeader(days, day, ::select, Modifier.widthIn(max = 1600.dp).padding(horizontal = 16.dp).align(Alignment.CenterHorizontally))
                 }
             },
             onRefresh = { model.refreshAll() },
@@ -295,7 +297,6 @@ fun TimetableScreen() {
                         val timeline = @Composable { shownDays: List<LocalDate> ->
                             Timeline(
                                 days = shownDays, selected = day, now = now, editing = editing && !isDraft, listState = listState,
-                                onSelect = ::select,
                                 onOpen = { entry, d -> sheet = if (editing && !isDraft) TimetableSheet.Editor(entry) else TimetableSheet.Detail(entry.id, d) },
                                 onEdit = { sheet = TimetableSheet.Editor(it) },
                                 onSeries = { sheet = TimetableSheet.Series(it) },

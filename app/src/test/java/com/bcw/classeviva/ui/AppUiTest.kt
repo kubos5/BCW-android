@@ -269,4 +269,25 @@ class AppUiTest {
         clickDescription("Vista Giorno")
         shot("dark-04-day")
     }
+
+    /** Tablet in orizzontale: barra laterale, settimana intera nella vista Giorno, trascinabile tra i giorni. */
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-land-xhdpi")
+    fun tablet() {
+        startDemo()
+        shot("tablet-01-dashboard")
+        rule.onNode(hasText("Orario") and hasClickAction()).performClick()
+        settle()
+        openFabMenu()
+        click("Genera dalle lezioni")
+        click("Crea l'anteprima")
+        waitForText("Anteprima dell'orario")
+        click("Applica")
+        val day = (1L..7L).map { java.time.LocalDate.now().plusDays(it) }.first { it.dayOfWeek.value == 3 }
+        rule.runOnUiThread { model.open(android.net.Uri.parse("bcw://orario?giorno=$day")) }
+        settle()
+        shot("tablet-02-timetable-list")
+        clickDescription("Vista Settimana")
+        shot("tablet-03-week")
+    }
 }

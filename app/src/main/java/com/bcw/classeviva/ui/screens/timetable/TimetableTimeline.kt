@@ -156,6 +156,31 @@ private suspend fun PointerInputScope.detectDelayedDrag(
 }
 
 /**
+ * I giorni sopra le colonne della settimana (schermi larghi): fermi sopra la giornata che scorre,
+ * con le stesse misure delle colonne. Toccandone uno lo si sceglie.
+ */
+@Composable
+fun TimelineDayHeader(days: List<LocalDate>, selected: LocalDate, onSelect: (LocalDate) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().height(64.dp).padding(end = 6.dp, bottom = 8.dp)) {
+        Box(Modifier.width(GUTTER.dp))
+        for (day in days) {
+            val isSel = day == selected
+            val today = Dates.isToday(day)
+            Column(
+                Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(Theme.radii.l)).clickable { onSelect(day) }.padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(Fmt.weekdayShort(day), style = Theme.type.style(13), color = if (isSel) Theme.scheme.primary else Theme.scheme.onSurfaceVariant)
+                Box(Modifier.size(30.dp).clip(CircleShape).background(if (isSel) Theme.scheme.primary else Color.Transparent), contentAlignment = Alignment.Center) {
+                    Text(day.dayOfMonth.toString(), style = Theme.type.numeral(15, 500),
+                        color = when { isSel -> Theme.scheme.onPrimary; today -> Theme.scheme.primary; else -> Theme.scheme.onSurface })
+                }
+            }
+        }
+    }
+}
+
+/**
  * La giornata a ore (vista Giorno; sugli schermi larghi la settimana): righe delle ore, linea di
  * adesso, eventi posizionati per orario, intervalli sopra le lezioni. In modifica gli eventi si
  * trascinano (anche in un altro giorno della settimana), si allungano dal bordo in basso e un
@@ -164,7 +189,7 @@ private suspend fun PointerInputScope.detectDelayedDrag(
 @Composable
 fun Timeline(
     days: List<LocalDate>, selected: LocalDate, now: LocalDateTime, editing: Boolean, listState: LazyListState,
-    onSelect: (LocalDate) -> Unit, onOpen: (TimetableEntry, LocalDate) -> Unit, onEdit: (TimetableEntry) -> Unit, onSeries: (Int) -> Unit,
+    onOpen: (TimetableEntry, LocalDate) -> Unit, onEdit: (TimetableEntry) -> Unit, onSeries: (Int) -> Unit,
     onCreate: (weekday: Int, start: Int) -> Unit,
 ) {
     val model = LocalModel.current
@@ -173,7 +198,6 @@ fun Timeline(
     val wide = LocalShell.current.wide
     val hh = if (wide) 52.dp else 60.dp
     val multiple = days.size > 1
-    val headerHeight = if (multiple) 64.dp else 0.dp
     val contents = days.map { store.dayContent(it, model.events(it), splitAtBreaks = false) }
     val showsNow = days.any { Dates.isToday(it) }
     val nowMinutes = Dates.minuteOfDay(now)
@@ -184,30 +208,11 @@ fun Timeline(
         val starts = contents.mapNotNull { it.layout.span?.first }
         val hour = if (starts.isNotEmpty()) maxOf(0, floor((starts.min() - 30) / 60.0).toInt()) else 7
         withFrameNanos {}
-        val offset = with(density) { (headerHeight + 8.dp + hh * hour - 8.dp).roundToPx() }
+        val offset = with(density) { (hh * hour).roundToPx() }
         listState.scrollToItem(0, maxOf(0, offset))
     }
 
     Column(Modifier.fillMaxWidth()) {
-        if (multiple) {
-            Row(Modifier.fillMaxWidth().height(headerHeight).padding(end = 6.dp, bottom = 8.dp)) {
-                Box(Modifier.width(GUTTER.dp))
-                for (day in days) {
-                    val isSel = day == selected
-                    val today = Dates.isToday(day)
-                    Column(
-                        Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(Theme.radii.l)).clickable { onSelect(day) }.padding(vertical = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(Fmt.weekdayShort(day), style = Theme.type.style(13), color = if (isSel) Theme.scheme.primary else Theme.scheme.onSurfaceVariant)
-                        Box(Modifier.size(30.dp).clip(CircleShape).background(if (isSel) Theme.scheme.primary else Color.Transparent), contentAlignment = Alignment.Center) {
-                            Text(day.dayOfMonth.toString(), style = Theme.type.numeral(15, 500),
-                                color = when { isSel -> Theme.scheme.onPrimary; today -> Theme.scheme.primary; else -> Theme.scheme.onSurface })
-                        }
-                    }
-                }
-            }
-        }
         val line = Theme.scheme.outlineVariant
         Box(
             Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp).height(hh * 24)
