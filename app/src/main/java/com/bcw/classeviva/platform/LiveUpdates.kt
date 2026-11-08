@@ -157,55 +157,42 @@ object LiveUpdates {
         val next = phases.firstOrNull { it.start > minute && !it.isBreak }
         val dark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val colors = bcwColors(context, ThemeSettings.from(model.preferences), dark)
-        fun tintArgb(t: EntryTint): Int = when (t) {
-            is EntryTint.Subject -> colors.subject(t.index).color.toArgbCompat()
-            EntryTint.Break -> colors.breakTint.toArgbCompat()
-            is EntryTint.Hex -> (0xFF000000.toInt() or t.hex)
-        }
+        // Una sola idea per notifica: cosa c'è adesso, quando finisce, e il progresso della giornata.
         val title: String
         val text: String
         val endMinute: Int
         when {
             current != null && !current.isBreak -> {
-                title = current.title + if (current.hasTest) " · verifica" else ""
-                text = listOfNotNull(
-                    current.room.ifEmpty { null }, current.teacher.ifEmpty { null },
-                    next?.let { "Poi ${it.title} alle ${TimeOfDay.string(it.start)}" } ?: "Ultima lezione",
-                ).joinToString(" · ")
+                title = current.title
+                text = listOfNotNull(current.room.ifEmpty { null }, "fino alle ${TimeOfDay.string(current.end)}").joinToString(" · ")
                 endMinute = current.end
             }
             current != null -> {
-                title = current.title
-                text = next?.let { "Poi ${it.title}${if (it.room.isNotEmpty()) " in ${it.room}" else ""} alle ${TimeOfDay.string(it.start)}" } ?: "Ultima pausa"
+                title = "Pausa"
+                text = "fino alle ${TimeOfDay.string(current.end)}"
                 endMinute = current.end
             }
             next != null -> {
-                title = if (minute < dayStart) "Tra poco: ${next.title}" else "Ora libera"
-                text = "${next.title} alle ${TimeOfDay.string(next.start)}${if (next.room.isNotEmpty()) " · ${next.room}" else ""}"
+                title = "Prossima: ${next.title}"
+                text = "alle ${TimeOfDay.string(next.start)}${if (next.room.isNotEmpty()) " · ${next.room}" else ""}"
                 endMinute = next.start
             }
             else -> {
-                title = "Lezioni finite"
-                text = "Buon pomeriggio!"
+                title = "Finito per oggi"
+                text = ""
                 endMinute = windowEnd
             }
         }
-        val endTime = today.atStartOfDay().plusMinutes(endMinute.toLong())
-        val style = NotificationCompat.ProgressStyle()
-            .setStyledByProgress(true)
-            .setProgress((minute - dayStart).coerceIn(0, dayEnd - dayStart))
-        var cursor = dayStart
-        for (p in phases.filter { it.end > dayStart }) {
-            if (p.start > cursor) style.addProgressSegment(NotificationCompat.ProgressStyle.Segment(p.start - cursor).setColor(colors.scheme.outlineVariant.toArgbCompat()))
-            val s = maxOf(p.start, cursor)
-            val e = minOf(p.end, dayEnd)
-            if (e > s) style.addProgressSegment(NotificationCompat.ProgressStyle.Segment(e - s).setColor(tintArgb(p.tint)))
-            cursor = maxOf(cursor, e)
-        }
-        if (cursor < dayEnd) style.addProgressSegment(NotificationCompat.ProgressStyle.Segment(dayEnd - cursor))
+        // Barra a due tinte: la parte già fatta nel colore d'accento, il resto neutro.
+        val total = dayEnd - dayStart
+        val done = (minute - dayStart).coerceIn(0, total)
+        val style = NotificationCompat.ProgressStyle().setProgress(done)
+        if (done > 0) style.addProgressSegment(NotificationCompat.ProgressStyle.Segment(done).setColor(colors.scheme.primary.toArgbCompat()))
+        if (total - done > 0) style.addProgressSegment(NotificationCompat.ProgressStyle.Segment(total - done).setColor(colors.scheme.outlineVariant.toArgbCompat()))
         val remaining = maxOf(0, endMinute - minute)
         val builder = NotificationCompat.Builder(context, Notifier.LIVE)
             .setSmallIcon(R.drawable.ic_notification)
+            .setSubText("BCW · Orario")
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(style)
@@ -214,15 +201,11 @@ object LiveUpdates {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setWhen(Dates.epochMillis(endTime))
-            .setUsesChronometer(true)
-            .setChronometerCountDown(true)
-            .setShowWhen(true)
             .setShortCriticalText(if (remaining >= 60) "${remaining / 60}h${String.format(java.util.Locale.ROOT, "%02d", remaining % 60)}" else "${remaining}min")
             .setRequestPromotedOngoing(true)
             .setContentIntent(Notifier.openApp(context, "bcw://orario?giorno=${Dates.dayKey(today)}", 77))
             .setDeleteIntent(dismissed(context))
-        current?.let { builder.setColor(tintArgb(it.tint)) }
+            .setColor(colors.scheme.primary.toArgbCompat())
         try {
             NotificationManagerCompat.from(context).notify(TAG, 0, builder.build())
             shownDay = today
