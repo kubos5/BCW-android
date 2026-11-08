@@ -1,18 +1,66 @@
-# BCW: Better ClasseViVa per Android
-Un client nativo per Android del registro elettronico [Classeviva](https://web.spaggiari.eu) di Gruppo Spaggiari Parma, in stile Material 3 Expressive.
-È la versione Android di [BCW per iPhone e iPad](https://github.com/kubos5/BCW), con le stesse funzioni della [versione web](https://github.com/kubos5/BCW-web) e lo stesso [account BCW](https://github.com/kubos5/BCW-api).
+<p align="center">
+  <img src="docs/logo.png" alt="BCW — Better ClasseViVa per Android" width="600" />
+</p>
 
-> BCW non è affiliato a Gruppo Spaggiari Parma S.p.A.
+<h1 align="center">BCW per Android</h1>
+
+<p align="center">
+  <strong>Il registro elettronico Classeviva, ridisegnato.</strong><br/>
+  Material 3 Expressive, widget vivi, lezione in corso nella barra di stato — e la tua scuola, bella da guardare.
+</p>
+
+<p align="center">
+  <a href="https://github.com/kubos5/BCW">📱 Versione iPhone e iPad</a> ·
+  <a href="https://github.com/kubos5/BCW-web">🌐 Versione web</a> ·
+  <a href="https://github.com/kubos5/BCW-api">☁️ Account BCW</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots.png" alt="Schermate dell'app: Dashboard, Orario, Voti e Tu" width="900" />
+</p>
 
 ---
 
+> **BCW** significa *Better ClasseViVa*: tutte le funzioni del client ufficiale di [Classeviva](https://web.spaggiari.eu) (Gruppo Spaggiari Parma), più quelle che ti sarebbero utili davvero — obiettivo di media, compiti da spuntare, orario che si disegna da solo. Questa è la versione **Android**, nativa, con lo stesso account della versione per iPhone e quella web.
+>
+> *BCW non è affiliato a Gruppo Spaggiari Parma S.p.A.*
+
+## Perché BCW
+
+Classeviva è il registro che usi ogni giorno: qui è rifatto da capo, con attenzione alle cose che contano.
+
+- **Media che si capisce** — calcolata come vuoi (tutti i voti o le medie, con o senza pesi), con l'effetto di ogni voto, grafici dell'andamento, obiettivo da raggiungere e *"E se prendessi…"* per sapere prima della prova quanto ti serve.
+- **Orario vero** — la settimana compilata a mano o generata dalle lezioni registrate, con intervalli, colori, note e file per ogni giorno, verifiche di Classeviva che compaiono da sole e una modalità di modifica con trascinamento e allineamento.
+- **Tutto in una ricerca** — compiti, voti, comunicazioni, materiale e note, dalla barra in cima alla Dashboard.
+- **Più account, una sola app** — anche genitore con più figli; si cambia tenendo premuta la scheda Tu. Con un [account BCW](https://github.com/kubos5/BCW-api) impostazioni, aspetto e orario ti seguono su telefono, iPhone e web.
+- **Offline** — l'ultimo aggiornamento resta consultabile senza rete.
+- **Demo** — dati di esempio per provare l'app senza account.
+
+## Android in più
+
+Le parti di sistema sono equivalenti Android di quelle di iOS, con lo stesso carattere (Google Sans Flex) e gli stessi colori:
+
+| | |
+|---|---|
+| 📊 **Lezione in corso** | una notifica che si aggiorna da sola (Live Updates su Android 16) nella barra di stato e nella schermata di blocco: materia, aula, quanto manca, la lezione dopo |
+| 🧩 **Widget** | Orario, Lezione in corso, Compiti e verifiche, Prossima verifica, Media (con la media ingrandita: anello e ultimi voti) — nei colori del tema, che si aprono nel punto giusto |
+| 🔔 **Notifiche** | promemoria la sera prima di compiti e verifiche, novità (voti, comunicazioni, note, assenze) controllate ogni ora circa |
+| 🔒 **Blocco** | impronta, volto o blocco schermo del telefono |
+| 📅 **Calendario** | compiti, verifiche ed eventi nel calendario del telefono |
+| 🎨 **Aspetto** | colore d'accento (o Material You), contrasto, angoli, animazioni |
+
 ## Installazione
 
-Finché l'app non sarà su Google Play puoi compilarla da te:
+Finché l'app non arriva su Google Play, puoi compilarla:
 
-1. installa [Android Studio](https://developer.android.com/studio) (o solo l'Android SDK con la piattaforma 36)
-2. clona `https://github.com/kubos5/BCW-android` e aprilo con Android Studio
-3. esegui su un telefono collegato (con il debug USB attivo) o su un emulatore
+1. installa [Android Studio](https://developer.android.com/studio) (o solo l'SDK, piattaforma 36)
+2. clona e apri:
+
+   ```bash
+   git clone https://github.com/kubos5/BCW-android
+   ```
+
+3. esegui su un telefono collegato (debug USB) o su un emulatore
 
 Da riga di comando:
 
@@ -20,7 +68,9 @@ Da riga di comando:
 ./gradlew :app:assembleDebug
 ```
 
-L'APK di debug è in `app/build/outputs/apk/debug/` e si installa accanto a una versione di release (ha l'identificativo `com.bcw.classeviva.debug`).
+L'APK di debug è in `app/build/outputs/apk/debug/` (identificativo `com.bcw.classeviva.debug`, va accanto alla release).
+
+**Requisiti:** Android 8.0 (API 26) o più; Live Updates da Android 16; per compilare JDK 17 e SDK 36.
 
 ### Prove
 
@@ -28,36 +78,55 @@ L'APK di debug è in `app/build/outputs/apk/debug/` e si installa accanto a una 
 ./gradlew :app:testDebugUnitTest
 ```
 
-Le prove confrontano la demo, l'orario (formato, disposizione, generazione) e i colori del tema con quelli della versione web, e avviano l'app vera con Robolectric (introduzione, demo, schede e Orario), salvando gli screenshot in `app/build/screenshots`.
+Confrontano demo, orario e colori del tema con la versione web, e avviano l'app vera con Robolectric salvando gli screenshot in `app/build/screenshots`.
 
 ---
 
-## Funzioni
+## Mantieni il passo con il progetto principale
 
-Le stesse dell'app per iPhone, con gli equivalenti Android delle parti di sistema:
+BCW-android dipende da [**kubos5/BCW**](https://github.com/kubos5/BCW), il progetto principale per iPhone e iPad: le funzioni nascono lì e qui vengono portate su Android. Per aggiornare questa versione con agenti AI (Claude Code, Codex, o l'agente che preferisci), usa questo prompt:
 
-- voti con media (di tutti i voti o delle medie, con o senza pesi), effetto di ogni voto, grafici dell'andamento, obiettivo di media e "E se prendessi…"
-- Dashboard con la settimana o il mese, compiti da segnare come fatti (e nascondere), verifiche, eventi, presenze e lezioni; ricerca in tutto il registro
-- Tu con "Da vedere", bacheca (adesione, firma, risposta, allegati), note, scrutini, assenze, materiale, lezioni, agenda, materie, libri, calendario e anni precedenti
-- più account Classeviva (anche genitore con più figli) da cambiare tenendo premuta la scheda Tu o dall'avatar; modalità demo
-- account BCW: abbini più account Classeviva e ritrovi impostazioni, aspetto e orario (con i file) su ogni dispositivo, anche nell'app per iPhone e sul web
-- consultazione offline con i dati dell'ultimo aggiornamento
-- Orario: vista Lista e vista Giorno (la settimana intera sui tablet), modifica con trascinamento, ridimensionamento e doppio tocco, spostamento degli orari, allineamento automatico o libero, intervalli, colori e palette, bozza generata dalle lezioni, verifiche di Classeviva sulle lezioni con le regole per nasconderle, note e file per un giorno o per ogni settimana, backup compatibile con iPhone e web
-- introduzione alla prima apertura, in bianco e nero finché non scegli un colore
-- aspetto: colore d'accento (o i colori del sistema, Material You), stile dei colori, contrasto, tema chiaro o scuro, angoli, animazioni e caratteri arrotondati (Google Sans Flex)
+```text
+Aggiorna BCW-android con le ultime novità della repo principale kubos5/BCW.
 
-### Integrazioni Android
+1. Guarda cosa c'è di nuovo in kubos5/BCW (gh api repos/kubos5/BCW/commits):
+   - leggi gli ultimi commit e i file che toccano (gh api repos/kubos5/BCW/commits/<sha>)
+   - concentrati su Features/ e Store/: sono le funzioni visibili e i dati che le alimentano
+   - il README di kubos5/BCW descrive ogni funzione in italiano: è la specifica a cui tendere
 
-- **Notifiche**: promemoria la sera prima di compiti e verifiche; novità (voti, comunicazioni, note, assenze, agenda) controllate in background circa ogni ora
-- **Lezione in corso**: una notifica che si aggiorna da sola (Live Updates su Android 16, nella barra di stato e nella schermata di blocco), al posto dell'attività in diretta di iOS; parte mezz'ora prima della prima lezione e si avvia o si ferma a mano dalla scheda in cima all'orario di oggi
-- **Widget**: Orario, Lezione in corso, Compiti e verifiche, Prossima verifica e Media, con i colori del tema in chiaro e in scuro; toccandoli si apre l'app sul giorno o sulla scheda giusta
-- **Blocco** con impronta, volto o blocco schermo del telefono
-- **Calendario**: compiti, verifiche ed eventi si aggiungono al calendario del telefono
-- **Icona a tema** di Android 13 e successivi
+2. Per ogni novità che ha senso su Android (salta Liquid Glass, Dynamic Island e
+   le altre cose proprie di iOS):
+   - leggi come funziona nella repo principale e come l'app Android risolve oggi la
+     stessa cosa (cerca in app/src/main/java/com/bcw/classeviva/ la parte corrispondente)
+   - portala su Android con gli strumenti di questa repo: Compose e Material 3
+     Expressive in ui/ (Design e Components sono l'equivalente di Design/ e
+     Components/ dell'app iOS), i dati in data/, le parti di sistema in platform/
+   - rispetto i criteri dell'app: transizioni di Material 3 (asse condiviso,
+     dissolvenza), colori del tema, animazioni ridotte per chi le disattiva,
+     testi in italiano
 
-Non ci sono le funzioni proprie di iOS (Liquid Glass, icone alternative, Dynamic Island).
+3. Fai funzionare tutto:
+   - compila: ./gradlew :app:compileDebugKotlin
+   - prova: ./gradlew :app:testDebugUnitTest
+   - installa e guarda: ./gradlew :app:installDebug poi avvia l'app su emulatore
+     o telefono, e verifica le schermate toccate dalla novità
+   - aggiorna il README se la novità cambia una funzione elencata
 
-### Requisiti
+4. Apri una pull request verso main con un titolo e una descrizione in italiano,
+   una funzione per PR, dicendo cosa hai portato dalla repo principale e come l'hai
+   adattata ad Android.
+```
 
-- Android 8.0 (API 26) o successivo; Live Updates da Android 16
-- per compilare: JDK 17 e Android SDK 36
+## Licenza
+
+Distribuita con licenza MIT. Vedi [LICENSE](LICENSE).
+
+---
+
+<a href="https://star-history.com/#kubos5/BCW-android&Timeline">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=kubos5/BCW-android&type=Timeline&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=kubos5/BCW-android&type=Timeline" />
+   <img alt="Grafico degli stargazers nel tempo" src="https://api.star-history.com/svg?repos=kubos5/BCW-android&type=Timeline" width="600" />
+ </picture>
+</a>
