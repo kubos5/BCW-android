@@ -99,7 +99,8 @@ fun MainShell() {
         val wide = maxWidth >= 600.dp
         shell.wide = wide
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val barBottom = maxOf(14.dp, navInset - 10.dp)
+        // La pillola sta sempre sopra l'area di sistema (barra gesture o tasti), con un piccolo margine.
+        val barBottom = maxOf(14.dp, navInset + 6.dp)
         shell.bottomSpace = if (wide || shell.hidesBar) navInset else maxOf(64.dp + navInset, barBottom + 64.dp)
         CompositionLocalProvider(LocalShell provides shell) {
             if (wide) {
