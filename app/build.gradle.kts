@@ -100,3 +100,19 @@ dependencies {
 tasks.withType<Test>().configureEach {
     jvmArgs("-Duser.timezone=Europe/Rome", "-Duser.language=it", "-Duser.country=IT")
 }
+
+// `./gradlew launchDebug`: installa la build debug e la avvia. La debug ha l'ID `com.bcw.classeviva.debug`
+// (vedi applicationIdSuffix), non `com.bcw.classeviva` che è quello della release: con l'ID sbagliato
+// `am start` risponde "Activity class ... does not exist".
+val debugActivity = "com.bcw.classeviva.debug/com.bcw.classeviva.MainActivity"
+tasks.register<Exec>("launchDebug") {
+    group = "application"
+    description = "Installa la build debug sul dispositivo e la avvia."
+    dependsOn("installDebug")
+    // sdk.dir in local.properties è scritto con i ':' e i '\' escapati (es. C\:\\Users\\...).
+    val sdkDir = rootProject.file("local.properties").readLines()
+        .first { it.startsWith("sdk.dir=") }.substringAfter("=")
+        .replace("\\:", ":").replace("\\\\", "\\")
+    val adbName = if (System.getProperty("os.name").startsWith("Windows")) "adb.exe" else "adb"
+    commandLine(rootProject.file("$sdkDir/platform-tools/$adbName").absolutePath, "shell", "am", "start", "-n", debugActivity)
+}
