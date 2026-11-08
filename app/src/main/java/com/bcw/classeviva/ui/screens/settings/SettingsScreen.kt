@@ -49,6 +49,7 @@ import com.bcw.classeviva.data.DashboardMode
 import com.bcw.classeviva.data.NewsKind
 import com.bcw.classeviva.data.SyncCategory
 import com.bcw.classeviva.data.TitleAbbreviation
+import com.bcw.classeviva.data.WidgetBrand
 import com.bcw.classeviva.data.Preferences
 import com.bcw.classeviva.data.timetable.Alignment as TTAlignment
 import com.bcw.classeviva.platform.Platform
@@ -450,6 +451,9 @@ private fun DashboardPane() {
         item { ListRow("Vista", trailing = { SelectButton(DashboardMode.entries.map { it to it.title }, p.dashboardMode, { p.set("dashboardMode", it.name) }) }) }
         item { ToggleRow("Mostra \"Nei prossimi giorni\"", p.showUpcomingDays, { p.set("showUpcomingDays", it) }) }
         item { ListRow("Abbrevia il titolo", trailing = { SelectButton(TitleAbbreviation.entries.map { it to it.title }, p.titleAbbreviation, { p.set("titleAbbreviation", it.name) }) }) }
+    }
+    ListGroup(header = "Widget", footer = "Il marchio compare in alto a destra su ogni widget. Il widget Media, se lo ingrandisci, mostra anche gli ultimi voti: più largo, più colonne; più alto, più righe.") {
+        item { ListRow("Marchio", trailing = { SelectButton(WidgetBrand.entries.map { it to it.title }, p.widgetBrand, { p.set("widgetBrand", it.name) }) }) }
     }
 }
 
