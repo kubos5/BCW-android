@@ -124,7 +124,9 @@ object LiveUpdates {
         val boundaries = model.timetable.entriesOn(today, includingDraft = false).flatMap { listOf(it.start, it.end) }.toMutableList()
         if (!(Notifier.canNotify(context) && post(context, model, now, boundaries))) hide(manager)
         val next = boundaries.filter { it > minute }.minOrNull()
-        if (next != null && next < 1440) schedule(alarms, context, today.atStartOfDay().plusMinutes(next.toLong()))
+        // Con la notifica in vista si ridisegna ogni minuto: barra e minuti rimasti restano aggiornati.
+        val nextAt = if (shownDay != null) minOf(next ?: Int.MAX_VALUE, minute + 1) else next
+        if (nextAt != null && nextAt < 1440) schedule(alarms, context, today.atStartOfDay().plusMinutes(nextAt.toLong()))
         // Si ricontrolla domattina presto (l'orario di domani può cambiare nel frattempo).
         else schedule(alarms, context, today.plusDays(1).atTime(6, 0))
     }
@@ -217,7 +219,7 @@ object LiveUpdates {
     }
 
     private fun schedule(alarms: AlarmManager, context: Context, at: LocalDateTime) {
-        alarms.setWindow(AlarmManager.RTC_WAKEUP, Dates.epochMillis(at), 60_000L, pending(context))
+        alarms.setWindow(AlarmManager.RTC_WAKEUP, Dates.epochMillis(at), 10_000L, pending(context))
     }
 
     fun cancel(context: Context) {
