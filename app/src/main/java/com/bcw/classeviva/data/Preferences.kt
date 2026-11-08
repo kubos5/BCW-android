@@ -22,6 +22,9 @@ enum class AppearanceMode(val title: String) { system("Automatico"), light("Chia
 
 enum class TitleAbbreviation(val title: String) { automatic("Automatica"), always("Sempre"), never("Mai") }
 
+/** Marchio BCW in alto a destra dei widget: icona e nome, solo icona, o nascosto. */
+enum class WidgetBrand(val title: String) { full("Icona e BCW"), icon("Solo icona"), hidden("Nascosto") }
+
 /** Tipi di novità che si possono notificare (Impostazioni › Notifiche › Novità). */
 enum class NewsKind(val title: String, val icon: String) {
     grades("Nuovi voti", "graduationCap"),
@@ -66,6 +69,7 @@ class Preferences(private val store: SharedPreferences) {
             "newsNotifications" to JsonArray(emptyList()),
             "unsyncedCategories" to JsonArray(emptyList()),
             "titleAbbreviation" to JsonPrimitive("automatic"),
+            "widgetBrand" to JsonPrimitive("full"),
             // Solo su Android, solo su questo dispositivo.
             "dynamicColor" to JsonPrimitive(false),
             "liveUpdates" to JsonPrimitive(true),
@@ -132,6 +136,7 @@ class Preferences(private val store: SharedPreferences) {
     val dashboardMode: DashboardMode get() = runCatching { DashboardMode.valueOf(string("dashboardMode")) }.getOrDefault(DashboardMode.list)
     val appearance: AppearanceMode get() = runCatching { AppearanceMode.valueOf(string("appearance")) }.getOrDefault(AppearanceMode.system)
     val titleAbbreviation: TitleAbbreviation get() = runCatching { TitleAbbreviation.valueOf(string("titleAbbreviation")) }.getOrDefault(TitleAbbreviation.automatic)
+    val widgetBrand: WidgetBrand get() = runCatching { WidgetBrand.valueOf(string("widgetBrand")) }.getOrDefault(WidgetBrand.full)
     val hideCompletedHomework: Boolean get() = bool("hideCompletedHomework")
     val showUpcomingDays: Boolean get() = bool("showUpcomingDays")
     val timetableMode: com.bcw.classeviva.data.timetable.TimetableMode

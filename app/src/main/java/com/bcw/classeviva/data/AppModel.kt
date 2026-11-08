@@ -136,7 +136,11 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
         DiskCache.init(appContext)
         BCWServer.prefs = defaults
         preferences.onPersist = { sync.settingsChanged() }
-        preferences.onChange = { gradeBookCache = null }
+        // Un cambio d'impostazioni (es. marchio dei widget) ridisegna anche i widget.
+        preferences.onChange = {
+            gradeBookCache = null
+            hooks?.dataChanged()
+        }
         timetable.onSaved = { owner ->
             sync.timetableChanged(owner)
             hooks?.dataChanged()
