@@ -53,6 +53,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.ui.icons.Icon
 import com.bcw.classeviva.ui.nav.Tab
@@ -180,7 +181,7 @@ fun FloatingNavBar(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, onLo
             if (target != null) {
                 val x by animateDpAsState(with(density) { target.first.toDp() }, Theme.motion.defaultSpatialSpec(), label = "pillX")
                 val w by animateDpAsState(with(density) { target.second.toDp() }, Theme.motion.defaultSpatialSpec(), label = "pillW")
-                Box(Modifier.offset(x = x).width(w).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Theme.scheme.primary))
+                Box(Modifier.offset { IntOffset(x.roundToPx(), 0) }.width(w).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Theme.scheme.primary))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
                 for (tab in tabs) {

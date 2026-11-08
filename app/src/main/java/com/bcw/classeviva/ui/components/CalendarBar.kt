@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,6 +169,8 @@ fun CalendarBar(
         }
         val pageKey = if (month) selected.withDayOfMonth(1) else Dates.startOfWeek(selected)
         var dragged by remember { mutableFloatStateOf(0f) }
+        // Il gesto usa sempre l'ultimo `onShift`, che calcola dal giorno scelto in quel momento.
+        val shift by rememberUpdatedState(onShift)
         val reduced = Theme.reducedMotion
         AnimatedContent(
             targetState = pageKey,
@@ -178,7 +181,7 @@ fun CalendarBar(
                     onDragEnd = {
                         if (kotlin.math.abs(dragged) > 60) {
                             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            onShift(if (dragged < 0) 1 else -1)
+                            shift(if (dragged < 0) 1 else -1)
                         }
                         dragged = 0f
                     },

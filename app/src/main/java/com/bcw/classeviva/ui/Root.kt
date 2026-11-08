@@ -29,6 +29,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
@@ -37,6 +38,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.Phase
@@ -84,9 +87,11 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
     val navigator = remember { Navigator() }
     // Alla prima apertura l'introduzione parte in bianco e nero, già dal primo disegno.
     remember {
-        if (model.isFirstRun()) {
-            ui.monochrome = true
-            ui.onboarding = true
+        model.isFirstRun().also { first ->
+            if (first) {
+                ui.monochrome = true
+                ui.onboarding = true
+            }
         }
     }
     val settings = ThemeSettings.from(model.preferences).copy(monochrome = ui.onboarding && ui.monochrome)
@@ -98,11 +103,17 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
     BCWTheme(settings) {
         val dark = Theme.isDark
         LaunchedEffect(dark) { onSystemBars(dark) }
-        CompositionLocalProvider(LocalModel provides model, LocalUi provides ui, LocalNavigator provides navigator, LocalScreenMemory provides memory) {
+        // Il colore del contenuto predefinito (icone delle barre, testi senza colore) segue il tema: senza, era nero anche nel tema scuro.
+        CompositionLocalProvider(
+            LocalModel provides model, LocalUi provides ui, LocalNavigator provides navigator, LocalScreenMemory provides memory,
+            LocalContentColor provides Theme.scheme.onSurface,
+        ) {
             ThemeReveal(ui) {
                 val alpha by animateFloatAsState(if (model.isChangingSession) 0f else 1f, tween(if (model.isChangingSession) 180 else 260), label = "session")
                 val reduced = Theme.reducedMotion
-                AnimatedContent(model.phase, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "phase", modifier = Modifier.alpha(alpha)) { phase ->
+                // Sotto l'introduzione l'app non esiste per TalkBack (ci torna alla fine dell'introduzione).
+                val hidden = if (ui.onboarding) Modifier.clearAndSetSemantics {} else Modifier
+                AnimatedContent(model.phase, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "phase", modifier = Modifier.alpha(alpha).then(hidden)) { phase ->
                     when (phase) {
                         Phase.launching -> Launching()
                         Phase.signedOut -> LoginScreen()
@@ -131,23 +142,25 @@ private fun ThemeReveal(ui: UiController, content: @Composable BoxScope.() -> Un
     var snapshot by remember { mutableStateOf<ImageBitmap?>(null) }
     var center by remember { mutableStateOf(Offset.Zero) }
     val radius = remember { Animatable(0f) }
-    ui.revealer = { point, change ->
-        if (reduced || snapshot != null) change()
-        else scope.launch {
-            val image = runCatching { layer.toImageBitmap() }.getOrNull()
-            if (image == null) {
+    SideEffect {
+        ui.revealer = { point, change ->
+            if (reduced || snapshot != null) change()
+            else scope.launch {
+                val image = runCatching { layer.toImageBitmap() }.getOrNull()
+                if (image == null) {
+                    change()
+                    return@launch
+                }
+                val c = point ?: Offset(image.width / 2f, image.height / 2f)
+                center = c
+                radius.snapTo(0f)
+                snapshot = image
                 change()
-                return@launch
+                val far = listOf(Offset.Zero, Offset(image.width.toFloat(), 0f), Offset(0f, image.height.toFloat()), Offset(image.width.toFloat(), image.height.toFloat()))
+                    .maxOf { (it - c).getDistance() }
+                radius.animateTo(far, tween(650, easing = FastOutSlowInEasing))
+                snapshot = null
             }
-            val c = point ?: Offset(image.width / 2f, image.height / 2f)
-            center = c
-            radius.snapTo(0f)
-            snapshot = image
-            change()
-            val far = listOf(Offset.Zero, Offset(image.width.toFloat(), 0f), Offset(0f, image.height.toFloat()), Offset(image.width.toFloat(), image.height.toFloat()))
-                .maxOf { (it - c).getDistance() }
-            radius.animateTo(far, tween(650, easing = FastOutSlowInEasing))
-            snapshot = null
         }
     }
     Box(

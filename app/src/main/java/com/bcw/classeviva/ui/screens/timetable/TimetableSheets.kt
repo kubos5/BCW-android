@@ -44,6 +44,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -111,13 +112,16 @@ import java.util.Locale
 /** Il foglio aperto dall'Orario; alcuni ne aprono un altro (dettaglio → editor). */
 @Composable
 fun TimetableSheetHost(sheet: TimetableSheet?, onChange: (TimetableSheet?) -> Unit) {
-    when (sheet) {
-        null -> Unit
-        is TimetableSheet.Detail -> DetailSheet(sheet.entryId, sheet.day, onDismiss = { onChange(null) }, onEdit = { onChange(TimetableSheet.Editor(it)) })
-        is TimetableSheet.Editor -> EditorSheet(sheet, onDismiss = { onChange(null) })
-        is TimetableSheet.Series -> SeriesSheet(sheet.weekday, onDismiss = { onChange(null) })
-        is TimetableSheet.Shift -> ShiftSheet(sheet.weekday, onDismiss = { onChange(null) })
-        TimetableSheet.Generator -> GeneratorSheet(onDismiss = { onChange(null) })
+    // Ogni foglio riparte dal suo stato iniziale.
+    key(sheet) {
+        when (sheet) {
+            null -> Unit
+            is TimetableSheet.Detail -> DetailSheet(sheet.entryId, sheet.day, onDismiss = { onChange(null) }, onEdit = { onChange(TimetableSheet.Editor(it)) })
+            is TimetableSheet.Editor -> EditorSheet(sheet, onDismiss = { onChange(null) })
+            is TimetableSheet.Series -> SeriesSheet(sheet.weekday, onDismiss = { onChange(null) })
+            is TimetableSheet.Shift -> ShiftSheet(sheet.weekday, onDismiss = { onChange(null) })
+            TimetableSheet.Generator -> GeneratorSheet(onDismiss = { onChange(null) })
+        }
     }
 }
 
@@ -509,7 +513,7 @@ private fun EditorSheet(request: TimetableSheet.Editor, onDismiss: () -> Unit) {
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ListHeader("Quando", Modifier.padding(start = 0.dp))
+            ListHeader("Quando")
             if (isNew) {
                 Text("Giorni", style = Theme.type.style(13, 600), color = Theme.scheme.onSurfaceVariant)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
@@ -571,12 +575,11 @@ private fun EditorSheet(request: TimetableSheet.Editor, onDismiss: () -> Unit) {
                     automatic -> "Allineamento automatico: gli eventi iniziano all'ora o alla mezz'ora e durano 30 minuti o un'ora. Per orari liberi passa all'allineamento libero in Modifica orario."
                     else -> "Allineamento libero: inizio e fine possono essere qualsiasi orario."
                 },
-                Modifier.padding(start = 0.dp),
             )
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ListHeader("Dettagli", Modifier.padding(start = 0.dp))
+            ListHeader("Dettagli")
             if (!d.isBreak) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(d.teacher, { d = d.copy(teacher = it) }, label = { Text("Docente") }, singleLine = true, modifier = Modifier.weight(1f),

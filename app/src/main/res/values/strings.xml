@@ -7,4 +7,8 @@
     <string name="widget_agenda_description">I prossimi compiti, verifiche ed eventi</string>
     <string name="widget_average">Media</string>
     <string name="widget_average_description">La media generale dei voti</string>
+    <string name="widget_now">Lezione in corso</string>
+    <string name="widget_now_description">La lezione in corso, quanto manca e la prossima</string>
+    <string name="widget_next_test">Prossima verifica</string>
+    <string name="widget_next_test_description">La prossima verifica con i giorni che mancano</string>
 </resources>

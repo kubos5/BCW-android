@@ -103,6 +103,7 @@ fun PageScaffold(
     maxContentWidth: Dp = 840.dp,
     contentPadding: PaddingValues? = null,
     onReselect: (() -> Unit)? = null,
+    reselectScrollsToTop: Boolean = true,
     overlay: (@Composable BoxScope.() -> Unit)? = null,
     listModifier: Modifier = Modifier,
     content: LazyListScope.() -> Unit,
@@ -118,7 +119,7 @@ fun PageScaffold(
     if (page != null && page.isCurrent) {
         LaunchedEffect(nav.reselection) {
             if (nav.reselectedTab != page.tab || nav.reselection == 0) return@LaunchedEffect
-            if (listState.canScrollBackward) listState.animateScrollToItem(0)
+            if (reselectScrollsToTop && listState.canScrollBackward) listState.animateScrollToItem(0)
             else if (!page.isRoot) nav.popToRoot()
             else onReselect?.invoke()
         }

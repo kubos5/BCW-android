@@ -46,6 +46,8 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Le prove dell'interfaccia girano con Robolectric e hanno bisogno delle risorse (caratteri, stringhe).
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -85,10 +87,14 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.materialkolor.mcu)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 }
 
 tasks.withType<Test>().configureEach {

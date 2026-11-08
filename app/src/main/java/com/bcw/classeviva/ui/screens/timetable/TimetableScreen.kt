@@ -32,19 +32,21 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.FloatingActionButtonMenu
 import androidx.compose.material3.FloatingActionButtonMenuItem
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -69,7 +71,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.bcw.classeviva.platform.LiveUpdates
+import com.bcw.classeviva.ui.screens.settings.rememberNotificationPermission
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -172,7 +177,7 @@ fun TimetableScreen() {
     var fabExpanded by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val isDraft = store.draft != null
-    if (isDraft && editing) editing = false
+    LaunchedEffect(isDraft) { if (isDraft) editing = false }
     val mode = if (editing) TimetableMode.day else prefs.timetableMode
     val day = selection.day
     val defaultDay = remember(now, store.timetable, store.draft) { defaultTimetableDay({ store.entries(it) }, now) }
@@ -233,6 +238,8 @@ fun TimetableScreen() {
             },
             onRefresh = { model.refreshAll() },
             onReselect = { select(defaultDay) },
+            // La vista Giorno parte già scorsa alla prima ora: un nuovo tocco va subito al giorno predefinito.
+            reselectScrollsToTop = mode == TimetableMode.list,
             listState = listState,
             maxContentWidth = if (weekColumns) 1600.dp else 840.dp,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp + shell.bottomSpace + bottomExtra),
@@ -388,10 +395,17 @@ private fun EditToolbar(store: TimetableStore, onAlign: (TTAlignment) -> Unit, o
                 tooltip = { PlainTooltip { Text(a.title) } },
                 state = rememberTooltipState(),
             ) {
-                IconToggleButton(checked = store.alignment == a, onCheckedChange = { onAlign(a) }) { Icon(a.icon, contentDescription = a.title) }
+                // L'allineamento scelto è pieno nel primario, come nella versione web.
+                FilledIconToggleButton(
+                    checked = store.alignment == a, onCheckedChange = { onAlign(a) },
+                    colors = IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = Color.Transparent, contentColor = Theme.scheme.onPrimaryContainer,
+                        checkedContainerColor = Theme.scheme.primary, checkedContentColor = Theme.scheme.onPrimary,
+                    ),
+                ) { Icon(a.icon, contentDescription = a.title) }
             }
         }
-        VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp).align(Alignment.CenterVertically))
+        VerticalDivider(Modifier.height(24.dp).padding(horizontal = 4.dp).align(Alignment.CenterVertically), color = Theme.scheme.onPrimaryContainer.copy(alpha = 0.25f))
         ToolbarButton("Sposta gli orari", "schedule", enabled = !store.isEmpty, onClick = onShift)
         ToolbarButton("Nuovo intervallo", "coffee", onClick = onNewBreak)
         Button(onClick = onDone, contentPadding = ButtonDefaults.SmallContentPadding, modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterVertically)) {
@@ -407,7 +421,7 @@ private fun DraftToolbar(onGenerate: () -> Unit, onDiscard: () -> Unit, onApply:
     HorizontalFloatingToolbar(expanded = true, colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors()) {
         ToolbarButton("Cambia le impostazioni e rigenera", "tune", onClick = onGenerate)
         ToolbarButton("Scarta l'anteprima", "trash", onClick = onDiscard)
-        VerticalDivider(Modifier.height(32.dp).padding(horizontal = 4.dp).align(Alignment.CenterVertically))
+        VerticalDivider(Modifier.height(24.dp).padding(horizontal = 4.dp).align(Alignment.CenterVertically), color = Theme.scheme.onPrimaryContainer.copy(alpha = 0.25f))
         Button(onClick = onApply, contentPadding = ButtonDefaults.SmallContentPadding, modifier = Modifier.padding(start = 4.dp).align(Alignment.CenterVertically)) {
             Icon("check", size = 18.dp)
             Text("Applica", modifier = Modifier.padding(start = 6.dp))
@@ -422,7 +436,7 @@ private fun ToolbarButton(label: String, icon: String, enabled: Boolean = true, 
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
     ) {
-        IconButton(onClick = onClick, enabled = enabled) { Icon(icon, contentDescription = label) }
+        IconButton(onClick = onClick, enabled = enabled, colors = IconButtonDefaults.iconButtonVibrantColors()) { Icon(icon, contentDescription = label) }
     }
 }
 
@@ -650,19 +664,47 @@ private fun NowCard(content: DayContent, now: LocalDateTime, onOpen: (TimetableE
                     Icon(if (current != null) "timetableFill" else "schedule", size = 26.dp, tint = c)
                 }
             }
-            if (current != null) {
-                WavyProgress((minute - shown.start).toFloat() / (shown.end - shown.start), Modifier.fillMaxWidth(), color = c, trackColor = c.copy(alpha = 0.22f))
-                if (next != null) {
+            if (current != null) WavyProgress((minute - shown.start).toFloat() / (shown.end - shown.start), Modifier.fillMaxWidth(), color = c, trackColor = c.copy(alpha = 0.22f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (current != null && next != null) {
                     Row(
-                        Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.copy(alpha = 0.08f)).padding(horizontal = 12.dp),
+                        Modifier.weight(1f, fill = false).height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.copy(alpha = 0.08f)).padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon("chevronRight", size = 18.dp, tint = c)
                         Text("Poi ${next.entries.first().displayTitle} alle ${TimeOfDay.string(next.start)}", style = Theme.type.style(14, 600), color = c, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+                Spacer(Modifier.weight(1f))
+                LiveUpdateToggle(c)
             }
         }
+    }
+}
+
+/**
+ * Porta la lezione in corso nelle notifiche e nella schermata di blocco, o la toglie, solo per
+ * oggi (come il lucchetto dell'attività in diretta dell'app iOS).
+ */
+@Composable
+private fun LiveUpdateToggle(color: Color) {
+    val context = LocalContext.current
+    val withPermission = rememberNotificationPermission()
+    val on = LiveUpdates.shownDay == Dates.today()
+    val label = if (on) "Togli dalla schermata di blocco" else "Mostra nella schermata di blocco"
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+    ) {
+        FilledIconToggleButton(
+            checked = on,
+            onCheckedChange = { checked -> if (checked) withPermission { LiveUpdates.setToday(context, true) } else LiveUpdates.setToday(context, false) },
+            colors = IconButtonDefaults.filledIconToggleButtonColors(
+                containerColor = color.copy(alpha = 0.12f), contentColor = color,
+                checkedContainerColor = color, checkedContentColor = Theme.scheme.primaryContainer,
+            ),
+        ) { Icon("lockClock", contentDescription = label) }
     }
 }
 

@@ -49,6 +49,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,6 +82,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.Morph
@@ -89,6 +91,7 @@ import com.bcw.classeviva.data.AppearanceMode
 import com.bcw.classeviva.data.DashboardMode
 import com.bcw.classeviva.data.NewsKind
 import com.bcw.classeviva.data.Phase
+import com.bcw.classeviva.data.timetable.GenerationSettings
 import com.bcw.classeviva.data.timetable.TimetableDraft
 import com.bcw.classeviva.data.timetable.Weekday
 import com.bcw.classeviva.data.timetable.timetableLayout
@@ -178,6 +181,8 @@ fun OnboardingScreen() {
     // Il colore è scelto quando BCW non è più in bianco e nero.
     var chosen by rememberSaveable { mutableStateOf(!ui.monochrome) }
     var draft by remember { mutableStateOf<TimetableDraft?>(null) }
+    // Le ore scelte per l'orario restano tornando dall'anteprima.
+    var generation by remember { mutableStateOf(model.timetable.timetable.generation) }
     val steps = Step.entries.filter { it != Step.timetable || (prefs.showsTimetableTab && model.phase == Phase.signedIn) }
     // Un passaggio sparito (l'orario, spegnendo la scheda) porta al successivo.
     val current = if (step in steps) step else steps.firstOrNull { it.ordinal > step.ordinal } ?: Step.done
@@ -227,7 +232,7 @@ fun OnboardingScreen() {
             val page = @Composable { key: String ->
                 StepContent(
                     key = key, chosen = chosen, onChosen = { chosen = true }, draft = draft, onDraft = { dir = if (it != null) 1 else -1; draft = it },
-                    onNext = { go(1) }, onFinish = ::finish,
+                    generation = generation, onGeneration = { generation = it }, onNext = { go(1) }, onFinish = ::finish,
                 )
             }
             if (wide) {
@@ -250,7 +255,7 @@ fun OnboardingScreen() {
 @Composable
 private fun StepContent(
     key: String, chosen: Boolean, onChosen: () -> Unit, draft: TimetableDraft?, onDraft: (TimetableDraft?) -> Unit,
-    onNext: () -> Unit, onFinish: (Offset?) -> Unit,
+    generation: GenerationSettings, onGeneration: (GenerationSettings) -> Unit, onNext: () -> Unit, onFinish: (Offset?) -> Unit,
 ) {
     when (key) {
         Step.welcome.name -> CenterPage(
@@ -267,7 +272,7 @@ private fun StepContent(
         Step.features.name -> FeaturesPage(onNext)
         Step.classeviva.name -> ClassevivaPage(onNext)
         Step.bcw.name -> BCWPage(onNext)
-        Step.timetable.name -> TimetableSetupPage(onDraft, onNext)
+        Step.timetable.name -> TimetableSetupPage(generation, onGeneration, onDraft, onNext)
         "timetable-preview" -> if (draft != null) TimetablePreviewPage(draft, onDraft, onNext)
         else -> DonePage(onFinish)
     }
@@ -313,7 +318,7 @@ private fun CenterPage(title: String, text: String, actions: @Composable ColumnS
 @Composable
 private fun NextButton(title: String = "Continua", enabled: Boolean = true, loading: Boolean = false, onClick: () -> Unit) {
     Button(onClick = onClick, enabled = enabled && !loading, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-        if (loading) LoadingIndicator(Modifier.size(28.dp), color = Theme.scheme.onPrimary)
+        if (loading) LoadingIndicator(Modifier.size(28.dp), color = LocalContentColor.current)
         else {
             Text(title, style = Theme.type.style(16, 600))
             Icon("arrowBack", size = 20.dp, modifier = Modifier.padding(start = 8.dp).rotate(180f))
@@ -342,8 +347,8 @@ private fun Hero(step: Step, scale: Float) {
     val s = Theme.scheme
     Box(Modifier.fillMaxWidth().height(height), contentAlignment = Alignment.Center) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-            MorphShape(SATELLITES_A[index], s.tertiaryContainer, Modifier.offset(x = size * a.first, y = size * a.second).size(size * a.third), -angle * 1.5f)
-            MorphShape(SATELLITES_B[index], s.secondaryContainer, Modifier.offset(x = size * b.first, y = size * b.second).size(size * b.third), angle * 1.2f)
+            MorphShape(SATELLITES_A[index], s.tertiaryContainer, Modifier.offset { IntOffset((size * a.first).roundToPx(), (size * a.second).roundToPx()) }.size(size * a.third), -angle * 1.5f)
+            MorphShape(SATELLITES_B[index], s.secondaryContainer, Modifier.offset { IntOffset((size * b.first).roundToPx(), (size * b.second).roundToPx()) }.size(size * b.third), angle * 1.2f)
             MorphShape(step.shape, s.primaryContainer, Modifier.fillMaxSize(), angle)
             AnimatedContent(step.icon, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "heroCenter") { icon ->
                 if (icon == null) BCWLogo(height = size * 0.3f, stacked = true)
@@ -751,11 +756,10 @@ private fun BCWPage(onNext: () -> Unit) {
  * resta qui, così sotto l'Orario non va in anteprima.
  */
 @Composable
-private fun TimetableSetupPage(onDraft: (TimetableDraft?) -> Unit, onNext: () -> Unit) {
+private fun TimetableSetupPage(settings: GenerationSettings, onSettings: (GenerationSettings) -> Unit, onDraft: (TimetableDraft?) -> Unit, onNext: () -> Unit) {
     val model = LocalModel.current
     val store = model.timetable
     val scope = rememberCoroutineScope()
-    var settings by remember { mutableStateOf(store.timetable.generation) }
     var generating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val events = store.timetable.entries.size
@@ -777,13 +781,13 @@ private fun TimetableSetupPage(onDraft: (TimetableDraft?) -> Unit, onNext: () ->
                     }
                 }
             }, enabled = !generating, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                if (generating) LoadingIndicator(Modifier.size(28.dp), color = Theme.scheme.onPrimary) else Icon("wand", size = 20.dp)
+                if (generating) LoadingIndicator(Modifier.size(28.dp), color = LocalContentColor.current) else Icon("wand", size = 20.dp)
                 Text("Crea l'anteprima", Modifier.padding(start = 8.dp), style = Theme.type.style(16, 600))
             }
             TextButton(onClick = onNext, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Lo farò dopo") }
         },
     ) {
-        GenerationFields(settings) { settings = it }
+        GenerationFields(settings, onSettings)
         error?.let { ErrorBox(it) }
     }
 }

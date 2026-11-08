@@ -14,6 +14,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -44,6 +45,7 @@ import com.bcw.classeviva.data.AgendaKind
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.Phase
 import com.bcw.classeviva.data.timetable.EntryTint
+import com.bcw.classeviva.platform.LivePlan
 import com.bcw.classeviva.data.timetable.TimeOfDay
 import com.bcw.classeviva.data.timetable.Weekday
 import com.bcw.classeviva.data.timetable.defaultTimetableDay
@@ -62,6 +64,8 @@ object Widgets {
         if (manager.getGlanceIds(TimetableWidget::class.java).isNotEmpty()) TimetableWidget().updateAll(context)
         if (manager.getGlanceIds(AgendaWidget::class.java).isNotEmpty()) AgendaWidget().updateAll(context)
         if (manager.getGlanceIds(AverageWidget::class.java).isNotEmpty()) AverageWidget().updateAll(context)
+        if (manager.getGlanceIds(NowWidget::class.java).isNotEmpty()) NowWidget().updateAll(context)
+        if (manager.getGlanceIds(NextTestWidget::class.java).isNotEmpty()) NextTestWidget().updateAll(context)
     }
 
     fun model(context: Context): AppModel = (context.applicationContext as BCWApplication).model
@@ -246,4 +250,111 @@ private fun AverageContent(model: AppModel, light: BCWColors, dark: BCWColors) {
 
 class AverageWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = AverageWidget()
+}
+
+// MARK: - Lezione in corso
+
+class NowWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val model = Widgets.model(context)
+        val (light, dark) = Widgets.colors(context)
+        provideContent { WidgetFrame(context, "bcw://orario") { NowContent(model, light, dark) } }
+    }
+}
+
+/**
+ * La lezione in corso (materia, aula, quanto manca con la barra e la lezione dopo); senza lezioni
+ * in corso la prossima, anche di un altro giorno.
+ */
+@Composable
+private fun NowContent(model: AppModel, light: BCWColors, dark: BCWColors) {
+    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
+    val store = model.timetable
+    if (store.isEmpty) return Empty("Crea l'orario nell'app")
+    val today = Dates.today()
+    val minute = Dates.nowMinute()
+    val todayLessons = LivePlan.phases(model, today, true).filter { !it.isBreak }
+    val current = todayLessons.firstOrNull { it.start <= minute && minute < it.end }
+    val nextToday = todayLessons.firstOrNull { it.start > minute }
+    val laterDay = if (current == null && nextToday == null) defaultTimetableDay({ store.entries(it, false) }) else null
+    val shown = current ?: nextToday ?: laterDay?.let { d -> LivePlan.phases(model, d, true).firstOrNull { !it.isBreak } } ?: return Empty("Nessuna lezione")
+    fun tint(c: BCWColors) = when (val t = shown.tint) {
+        is EntryTint.Subject -> c.subject(t.index).color
+        EntryTint.Break -> c.breakTint
+        is EntryTint.Hex -> Color(0xFF000000.toInt() or t.hex)
+    }
+    val label = when {
+        current != null -> "ADESSO"
+        laterDay == null -> "TRA ${TimeOfDay.duration(shown.start - minute).uppercase(Dates.italian)}"
+        Dates.isTomorrow(laterDay) -> "DOMANI ALLE ${TimeOfDay.string(shown.start)}"
+        else -> "${Weekday.name(Weekday.of(laterDay)).uppercase(Dates.italian)} ALLE ${TimeOfDay.string(shown.start)}"
+    }
+    val following = if (current != null) todayLessons.firstOrNull { it.start >= current.end } else null
+    Column(GlanceModifier.fillMaxSize()) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.width(4.dp).height(14.dp).background(Widgets.dual(tint(light), tint(dark))).cornerRadius(2.dp)) {}
+            Spacer(GlanceModifier.width(6.dp))
+            Text(label, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+        }
+        Spacer(GlanceModifier.height(6.dp))
+        Text(shown.title, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Medium))
+        if (shown.room.isNotEmpty()) Text(shown.room, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
+        Spacer(GlanceModifier.defaultWeight())
+        if (current != null) {
+            Text("Fino alle ${TimeOfDay.string(current.end)} · ${TimeOfDay.duration(current.end - minute)}", maxLines = 1,
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+            Spacer(GlanceModifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = (minute - current.start).toFloat() / (current.end - current.start),
+                modifier = GlanceModifier.fillMaxWidth().height(6.dp),
+                color = GlanceTheme.colors.primary, backgroundColor = GlanceTheme.colors.secondaryContainer,
+            )
+            following?.let {
+                Spacer(GlanceModifier.height(6.dp))
+                Text("Poi ${it.title} alle ${TimeOfDay.string(it.start)}", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+            }
+        }
+    }
+}
+
+class NowWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = NowWidget()
+}
+
+// MARK: - Prossima verifica
+
+class NextTestWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val model = Widgets.model(context)
+        val next = if (model.phase == Phase.signedIn) model.agenda.filter { it.kind == AgendaKind.test && !it.day.isBefore(Dates.today()) }.minByOrNull { it.begin } else null
+        val link = next?.let { "bcw://dashboard?giorno=${Dates.dayKey(it.day)}" } ?: "bcw://dashboard"
+        provideContent { WidgetFrame(context, link) { NextTestContent(model, next) } }
+    }
+}
+
+/** La prossima verifica con i giorni che mancano. */
+@Composable
+private fun NextTestContent(model: AppModel, test: com.bcw.classeviva.data.AgendaEvent?) {
+    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
+    if (test == null) return Empty("Nessuna verifica in vista")
+    val days = Dates.daysBetween(Dates.today(), test.day)
+    val whenText = when (days) {
+        0L -> "Oggi"
+        1L -> "Domani"
+        else -> "Tra $days giorni"
+    }
+    Column(GlanceModifier.fillMaxSize()) {
+        Text("PROSSIMA VERIFICA", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.tertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.height(6.dp))
+        Text(test.title, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Medium))
+        if (test.notes.isNotEmpty()) Text(test.notes, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+        Spacer(GlanceModifier.defaultWeight())
+        Box(GlanceModifier.background(GlanceTheme.colors.tertiaryContainer).cornerRadius(12.dp).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            Text("$whenText · ${Fmt.shortDay(test.day)}", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+        }
+    }
+}
+
+class NextTestWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = NextTestWidget()
 }

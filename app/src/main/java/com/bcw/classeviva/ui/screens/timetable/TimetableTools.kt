@@ -24,6 +24,7 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
@@ -480,7 +481,7 @@ fun GeneratorSheet(onDismiss: () -> Unit) {
                 },
                 enabled = !generating, modifier = Modifier.fillMaxWidth().height(56.dp),
             ) {
-                if (generating) LoadingIndicator(Modifier.size(24.dp), color = Theme.scheme.onPrimary) else Icon("wand", size = 20.dp)
+                if (generating) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current) else Icon("wand", size = 20.dp)
                 Text("Crea l'anteprima", Modifier.padding(start = 8.dp), style = Theme.type.style(16, 600))
             }
             ListFooter("BCW guarda in quale ora della giornata si è svolta ogni materia, settimana per settimana, e tiene quelle che si ripetono (le settimane recenti contano di più, supplenze e recuperi isolati vengono ignorati). Vedrai l'orario in anteprima prima di applicarlo.")

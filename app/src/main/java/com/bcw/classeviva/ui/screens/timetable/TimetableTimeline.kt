@@ -43,7 +43,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -109,9 +110,13 @@ private fun previewFor(entry: TimetableEntry, alignment: TTAlignment, moveY: Flo
 /**
  * Trascinamento dopo una breve pressione (con il dito lo scorrimento della pagina resta libero):
  * `onDrag` riceve lo spostamento totale, `onEnd` se lo spostamento va salvato. Lasciando senza
- * essersi spostati il tocco resta un tocco (apre l'editor).
+ * essersi spostati il tocco resta un tocco (apre l'editor). L'evento si sposta mentre lo si
+ * trascina: `origin` è la sua posizione nella finestra, così lo spostamento si misura rispetto
+ * alla finestra e non all'evento (che a ogni scatto cambierebbe le coordinate del dito).
  */
-private suspend fun PointerInputScope.detectDelayedDrag(delayMillis: Long, onStart: () -> Unit, onDrag: (Offset) -> Unit, onEnd: (commit: Boolean) -> Unit) {
+private suspend fun PointerInputScope.detectDelayedDrag(
+    delayMillis: Long, origin: () -> Offset, onStart: () -> Unit, onDrag: (Offset) -> Unit, onEnd: (commit: Boolean) -> Unit,
+) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         // Prima della pressione prolungata: un tocco o uno scorrimento non avviano il trascinamento.
@@ -126,6 +131,7 @@ private suspend fun PointerInputScope.detectDelayedDrag(delayMillis: Long, onSta
         }
         if (early != null) return@awaitEachGesture
         onStart()
+        val start = down.position + origin()
         var total = Offset.Zero
         var moved = false
         while (true) {
@@ -141,7 +147,7 @@ private suspend fun PointerInputScope.detectDelayedDrag(delayMillis: Long, onSta
                 onEnd(moved)
                 return@awaitEachGesture
             }
-            total += change.positionChange()
+            total = change.position + origin() - start
             if (abs(total.x) >= 4 || abs(total.y) >= 4) moved = true
             change.consume()
             onDrag(total)
@@ -232,7 +238,8 @@ fun Timeline(
                     DayColumn(
                         content = contents[index], dayIndex = index, days = days, selected = day == selected && multiple, editing = editing, hh = hh,
                         drag = drag, onDragChange = { drag = it }, onOpen = onOpen, onEdit = onEdit, onSeries = onSeries, onCreate = onCreate,
-                        modifier = Modifier.weight(1f).fillMaxSize().then(
+                        // La colonna da cui si trascina sta sopra le altre: l'evento resta visibile anche spostandolo in un altro giorno.
+                        modifier = Modifier.weight(1f).fillMaxSize().zIndex(if (drag != null && contents[index].entries.any { it.id == drag?.entryId }) 1f else 0f).then(
                             if (index > 0) Modifier.drawBehind { drawLine(line.copy(alpha = 0.6f), Offset(0f, 0f), Offset(0f, size.height), 1.dp.toPx()) } else Modifier,
                         ),
                     )
@@ -322,7 +329,6 @@ private fun Segment(
     val store = model.timetable
     val ui = LocalUi.current
     val haptics = LocalHapticFeedback.current
-    val density = LocalDensity.current
     val day = content.day
     val badge = content.badges[entry.id]
     val isTest = model.preferences.timetableShowsTests && badge?.isTest == true
@@ -350,11 +356,15 @@ private fun Segment(
     val currentEntry by rememberUpdatedState(entry)
     val alignment = store.alignment
 
-    fun dragModifier(resize: Boolean, delay: Long) = Modifier.pointerInput(entry.id, resize, dayIndex, days, alignment, columnWidthPx) {
+    // Posizione nella finestra dell'evento e del bordo in basso, per misurare il trascinamento.
+    val bodyOrigin = remember { arrayOf(Offset.Zero) }
+    val handleOrigin = remember { arrayOf(Offset.Zero) }
+
+    fun dragModifier(resize: Boolean, delay: Long, origin: Array<Offset>) = Modifier.onGloballyPositioned { origin[0] = it.positionInRoot() }.pointerInput(entry.id, resize, dayIndex, days, alignment, columnWidthPx) {
         val hourPx = hh.toPx()
         var preview = DragState(entry.id, entry.start, entry.end, 0)
         detectDelayedDrag(
-            delay,
+            delay, origin = { origin[0] },
             onStart = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 preview = DragState(currentEntry.id, currentEntry.start, currentEntry.end, 0)
@@ -410,7 +420,7 @@ private fun Segment(
                     onClick = { onOpen(entry, day) },
                     onLongClick = if (draft || editing) null else ({ haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }),
                 )
-                .then(if (editing) dragModifier(resize = false, delay = 200) else Modifier)
+                .then(if (editing) dragModifier(resize = false, delay = 200, bodyOrigin) else Modifier)
                 .padding(start = if (draft && !entry.isBreak) 18.dp else if (entry.isBreak) 8.dp else 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         ) {
             if (draft && !entry.isBreak) {
@@ -423,7 +433,7 @@ private fun Segment(
         if (editing) {
             // Il bordo in basso: trascinandolo cambia la durata.
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(12.dp).then(dragModifier(resize = true, delay = 100)),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(12.dp).then(dragModifier(resize = true, delay = 100, handleOrigin)),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(Modifier.size(22.dp, 3.dp).clip(RoundedCornerShape(2.dp)).background(Theme.scheme.onSurface.copy(alpha = 0.35f)))

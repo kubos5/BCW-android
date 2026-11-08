@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -100,19 +101,26 @@ fun rememberDaySelection(initial: () -> LocalDate): DaySelection {
     return selection
 }
 
-/** Scorrere di lato sul contenuto cambia giorno (non sopra elementi che scorrono di lato). */
-fun Modifier.daySwipe(onSwipe: (Int) -> Unit): Modifier = pointerInput(Unit) {
-    var total = 0f
-    detectHorizontalDragGestures(
-        onDragStart = { total = 0f },
-        onDragEnd = {
-            if (kotlin.math.abs(total) > 90) onSwipe(if (total < 0) 1 else -1)
-            total = 0f
-        },
-        onDragCancel = { total = 0f },
-    ) { change, amount ->
-        total += amount
-        change.consume()
+/**
+ * Scorrere di lato sul contenuto cambia giorno (non sopra elementi che scorrono di lato). Il gesto
+ * usa sempre l'ultimo `onSwipe`, che calcola dal giorno scelto in quel momento.
+ */
+@Composable
+fun Modifier.daySwipe(onSwipe: (Int) -> Unit): Modifier {
+    val current by rememberUpdatedState(onSwipe)
+    return pointerInput(Unit) {
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragEnd = {
+                if (kotlin.math.abs(total) > 90) current(if (total < 0) 1 else -1)
+                total = 0f
+            },
+            onDragCancel = { total = 0f },
+        ) { change, amount ->
+            total += amount
+            change.consume()
+        }
     }
 }
 

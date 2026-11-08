@@ -26,7 +26,6 @@ object Notifier {
     const val LIVE = "live"
 
     fun createChannels(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(NEWS, "Novità", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Nuovi voti, comunicazioni, note, assenze, compiti e verifiche"

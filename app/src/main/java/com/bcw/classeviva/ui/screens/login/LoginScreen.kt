@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -193,7 +194,7 @@ internal fun ClassevivaForm(adding: Boolean, onDone: () -> Unit, onDemo: () -> U
         Field(password, { password = it }, "Password", "key", password = true, last = true) { submit() }
         error?.let { ErrorBox(it) }
         Button(onClick = { submit() }, enabled = username.isNotBlank() && password.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            if (busy) LoadingIndicator(Modifier.size(28.dp), color = Theme.scheme.onPrimary) else Text("Accedi", style = Theme.type.style(16, 600))
+            if (busy) LoadingIndicator(Modifier.size(28.dp), color = LocalContentColor.current) else Text("Accedi", style = Theme.type.style(16, 600))
         }
         if (!adding && !model.isCloud) {
             FilledTonalButton(onClick = { model.startDemo(); onDemo() }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
@@ -266,7 +267,7 @@ internal fun CloudForm(register: Boolean, onToggleRegister: () -> Unit, compact:
         AnimatedVisibility(register) { Field(confirm, { confirm = it }, "Ripeti la password", "key", password = true, last = true) { submit() } }
         error?.let { ErrorBox(it) }
         Button(onClick = { submit() }, enabled = username.isNotBlank() && password.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            if (busy) LoadingIndicator(Modifier.size(28.dp), color = Theme.scheme.onPrimary) else Text(if (register) "Crea l'account" else "Accedi", style = Theme.type.style(16, 600))
+            if (busy) LoadingIndicator(Modifier.size(28.dp), color = LocalContentColor.current) else Text(if (register) "Crea l'account" else "Accedi", style = Theme.type.style(16, 600))
         }
         if (!compact) {
             FilledTonalButton(onClick = onToggleRegister, modifier = Modifier.fillMaxWidth().height(52.dp)) {
