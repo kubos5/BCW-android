@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BCW</string>
+    <string name="widget_timetable">Orario di oggi</string>
+    <string name="widget_timetable_description">Le lezioni di oggi o del prossimo giorno di scuola</string>
+    <string name="widget_agenda">Compiti e verifiche</string>
+    <string name="widget_agenda_description">I prossimi compiti, verifiche ed eventi</string>
+    <string name="widget_average">Media</string>
+    <string name="widget_average_description">La media generale dei voti</string>
+</resources>

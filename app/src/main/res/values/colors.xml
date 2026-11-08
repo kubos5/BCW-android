@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Icona: tema Mattone (sfondo primary-container, scritta on-surface, barra brand), come l'icona dell'app iOS. -->
+    <color name="ic_launcher_background">#FAAA9D</color>
+    <color name="ic_launcher_ink">#3E2F2C</color>
+    <color name="ic_launcher_brand">#A23E2F</color>
+    <color name="splash_background">#FFF8F6</color>
+</resources>
