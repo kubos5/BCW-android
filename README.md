@@ -22,50 +22,28 @@
 
 <br><br>
 
-## Perché BCW
-
-Classeviva è il registro che usi ogni giorno: qui è rifatto da capo, con attenzione alle cose che contano.
-
-- **Media che si capisce** — calcolata come vuoi (tutti i voti o le medie, con o senza pesi), con l'effetto di ogni voto, grafici dell'andamento, obiettivo da raggiungere e *"E se prendessi…"* per sapere prima della prova quanto ti serve.
-- **Orario vero** — la settimana compilata a mano o generata dalle lezioni registrate, con intervalli, colori, note e file per ogni giorno, verifiche di Classeviva che compaiono da sole e una modalità di modifica con trascinamento e allineamento.
-- **Tutto in una ricerca** — compiti, voti, comunicazioni, materiale e note, dalla barra in cima alla Dashboard.
-- **Più account, una sola app** — anche genitore con più figli; si cambia tenendo premuta la scheda Tu. Con un [account BCW](https://github.com/kubos5/BCW-api) impostazioni, aspetto e orario ti seguono su telefono, iPhone e web.
-- **Offline** — l'ultimo aggiornamento resta consultabile senza rete.
-- **Demo** — dati di esempio per provare l'app senza account.
-
-## Android in più
-
-Le parti di sistema sono equivalenti Android di quelle di iOS, con lo stesso carattere (Google Sans Flex) e gli stessi colori:
-
-| | |
-|---|---|
-| 📊 **Lezione in corso** | una notifica che si aggiorna da sola (Live Updates su Android 16) nella barra di stato e nella schermata di blocco: materia, aula, quanto manca, la lezione dopo |
-| 🧩 **Widget** | Orario, Lezione in corso, Compiti e verifiche, Prossima verifica, Media (con la media ingrandita: anello e ultimi voti) — nei colori del tema, che si aprono nel punto giusto |
-| 🔔 **Notifiche** | promemoria la sera prima di compiti e verifiche, novità (voti, comunicazioni, note, assenze) controllate ogni ora circa |
-| 🔒 **Blocco** | impronta, volto o blocco schermo del telefono |
-| 📅 **Calendario** | compiti, verifiche ed eventi nel calendario del telefono |
-| 🎨 **Aspetto** | colore d'accento (o Material You), contrasto, angoli, animazioni |
-
 ## Installazione
 
-Finché l'app non arriva su Google Play, puoi compilarla:
+1. scarica l'ultima versione dalle [release](https://github.com/kubos5/BCW/releases/latest)
+2. installa l'APK su un dispositivo Android
+3. fatto!
 
-1. installa [Android Studio](https://developer.android.com/studio) (o solo l'SDK, piattaforma 36)
-2. clona e apri:
+Alternativamente, puoi compilare manualmente:
 
-   ```bash
-   git clone https://github.com/kubos5/BCW-android
-   ```
+### Installazione manuale con Android Studio
 
-3. esegui su un telefono collegato (debug USB) o su un emulatore
+1. installa [Android Studio](https://developer.android.com/studio)
+2. clona
+    ```
+    https://github.com/kubos5/BCW-android
+    ```
+3. esegui su un telefono connesso via USB o su un simulatore
 
-Da riga di comando:
+Da terminale:
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
-
-L'APK di debug è in `app/build/outputs/apk/debug/` (identificativo `com.bcw.classeviva.debug`, va accanto alla release).
 
 **Requisiti:** Android 8.0 (API 26) o più; Live Updates da Android 16; per compilare JDK 17 e SDK 36.
 
