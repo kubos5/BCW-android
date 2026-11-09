@@ -64,6 +64,16 @@ app/src/main/java/com/bcw/classeviva/
 └── util/                 Dates.kt (orologio sostituibile nei test), Json.kt, Text.kt
 ```
 
+Il modulo `:wear` (app Wear OS, Kotlin e Compose Wear Material 3) ha la stessa struttura in piccolo:
+
+```
+wear/src/main/java/com/bcw/classeviva/wear/
+├── MainActivity.kt          Unica attività: carica i dati, chiede l'orario al telefono
+├── data/                    WatchPayload.kt (payload dal telefono), WatchData.kt (persistenza), Schedule.kt (lezione in corso e prossima), DemoSchedule.kt (orario di esempio)
+├── sync/WatchSyncService.kt Riceve l'orario dalla Data Layer di Wear OS
+└── ui/                      WearApp.kt (hero a tutto schermo + "Tutto l'orario"), theme/ (ColorEngine e tema Wear)
+```
+
 ### 3.2 Flusso dei dati
 
 1. `Api.kt` parla con Classeviva attraverso un `Transport`. In modalità demo il trasporto è `DemoTransport` (`Demo.kt`) e nessuna richiesta esce dal telefono.
@@ -72,6 +82,7 @@ app/src/main/java/com/bcw/classeviva/
 4. Dopo ogni aggiornamento `AppModel` alimenta anche widget, promemoria, notifiche delle novità e notifica "Orario di oggi".
 5. Con un account BCW, `CloudSync` unisce a tre vie le impostazioni elencate in `SYNCED_PREFERENCES` e l'orario di ogni account (vince il lato cambiato; se cambiano entrambi vince questo dispositivo; la prima volta il server).
 6. Il cambio di sessione (altro account, demo) sfuma l'interfaccia, cambia i dati mentre non si vede e la fa riapparire quando i dati ci sono (al massimo 3 secondi).
+7. L'orologio (modulo `:wear`) riceve l'orario dall'app del telefono tramite la Data Layer di Wear OS: il telefono mette un payload compatto (`/bcw/timetable`, le lezioni senza note e allegati, con i colori già risolti e la palette delle materie) e risponde alla richiesta `/bcw/request` dell'orologio (`WearSync.kt`, `WearSyncService.kt`, `WatchSyncService.kt`). Il payload è un formato interno ad Android: non tocca i formati condivisi con iOS e web. Fino al primo arrivo l'orologio mostra un orario di esempio con il marchio "DEMO".
 
 ### 3.3 API Classeviva
 
@@ -142,14 +153,19 @@ Material 3 Expressive come sul web: stessi colori generati da un accento (predef
 Requisiti: JDK 17, Android SDK 36, Android Studio o solo la riga di comando. Minimo Android 8.0 (API 26); i Live Update richiedono Android 16.
 
 ```bash
-./gradlew :app:compileDebugKotlin     # compila
-./gradlew :app:testDebugUnitTest      # prove
+./gradlew :app:compileDebugKotlin     # compila l'app del telefono
+./gradlew :wear:compileDebugKotlin    # compila l'app Wear OS
+./gradlew :app:testDebugUnitTest      # prove dell'app del telefono
+./gradlew :wear:testDebugUnitTest     # prove dell'app Wear OS
 ./gradlew :app:assembleDebug          # APK di debug
 ./gradlew :app:installDebug           # installa su telefono o emulatore
+./gradlew :wear:installDebug          # installa su orologio o emulatore Wear
 ./gradlew launchDebug                 # installa e avvia (serve sdk.dir in local.properties)
 ```
 
 La build debug ha ID `com.bcw.classeviva.debug`; la release `com.bcw.classeviva`. Per provare a mano usa "Prova la demo" (nessun account necessario).
+
+L'app Wear OS è un modulo `:wear` separato: stesso `applicationId` (serve alla Data Layer di Wear OS), `minSdk 30` (Wear OS 3) e Wear Compose Material 3. La sincronizzazione con il telefono non è provabile end-to-end su emulatore senza un telefono abbinato: con `adb shell run-as com.bcw.classeviva.debug` si può scrivere a mano il payload in `shared_prefs/bcw.wear.xml` per provare l'interfaccia.
 
 ### Prove automatiche
 
@@ -157,6 +173,7 @@ La build debug ha ID `com.bcw.classeviva.debug`; la release `com.bcw.classeviva`
 - `DemoParityTest`: dati della demo identici a quelli del web (riferimento `demo-ref.json`, prodotto da `js/demo.js` con `TZ=Europe/Rome` e orologio fissato all'8/11/2026 alle 10:00).
 - `TimetableParityTest`: lettura e scrittura dell'orario, layout, generatore, palette, backup e giorno predefinito coincidono con `js/timetable.js` (riferimento `tt-ref.json`).
 - `AppUiTest`: avvia l'app vera con Robolectric (SDK 35, schermo 411 x 891 dp), percorre introduzione, demo, schede e Orario, e salva gli screenshot in `app/build/screenshots/`. Guardali: sono il modo di vedere cosa ha fatto la modifica.
+- Nel modulo `:wear`: `ScheduleTest` (lezione in corso, prossima, giorni successivi) e `PayloadTest` (parsing del payload dal telefono, con palette). Girano come `:wear:testDebugUnitTest` con `Europe/Rome`.
 
 I file `*-ref.json` in `app/src/test/resources/` sono il contratto con il web. Nella repo non c'è uno script che li rigeneri. Se il web cambia i dati di riferimento di proposito, rigenerali eseguendo i moduli JS del web nelle stesse condizioni (fuso Europe/Rome, data e ora fissate come sopra, stessi campi che il test legge) e poi adatta il codice Kotlin finché i test passano. Non modificare mai un riferimento a mano per far passare un test. Eccezione nota e documentata nel test: il separatore (`outline-variant`) dello stile Vivace con contrasto alto differisce leggermente tra le due librerie.
 

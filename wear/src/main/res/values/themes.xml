@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema di sistema minimo: l'interfaccia la disegna Compose con Material 3 Expressive. -->
+    <style name="Theme.BCWWear" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@color/wear_window</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

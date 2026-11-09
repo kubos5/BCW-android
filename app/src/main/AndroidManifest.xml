@@ -65,6 +65,13 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <service android:name=".platform.WearSyncService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/bcw" />
+            </intent-filter>
+        </service>
+
         <receiver android:name=".platform.ReminderReceiver" android:exported="false" />
         <receiver android:name=".platform.LiveUpdateReceiver" android:exported="false" />
         <receiver android:name=".platform.BootReceiver" android:exported="false">
