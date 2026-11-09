@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -122,7 +123,31 @@ fun LoginContent(adding: Boolean, onDone: () -> Unit) {
             CloudForm(register, onToggleRegister = { register = !register }, compact = compact, onDone = onDone)
         }
         if (!compact && !adding && !linkingFirst) {
-            Text("BCW non è affiliato a Gruppo Spaggiari Parma S.p.A.", style = Theme.type.style(12), color = Theme.scheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            LoginFooter()
+        }
+    }
+}
+
+/**
+ * Note in basso nella schermata di accesso: l'affiliazione e "Rivedi l'introduzione" (come la versione
+ * web 3.3.1). I due testi stanno affiancati se ci stanno, uno sotto l'altro se no.
+ */
+@Composable
+private fun LoginFooter() {
+    val ui = LocalUi.current
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "BCW non è affiliato a Gruppo Spaggiari Parma S.p.A.",
+            style = Theme.type.style(12), color = Theme.scheme.onSurfaceVariant, textAlign = TextAlign.Center,
+        )
+        TextButton(onClick = { ui.presentOnboarding() }) {
+            Icon("sparkles", size = 16.dp)
+            Text("Rivedi l'introduzione", style = Theme.type.style(12), modifier = Modifier.padding(start = 6.dp))
         }
     }
 }
