@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sfondo della finestra all'avvio: scuro, mai nero puro. -->
+    <color name="wear_window">#141210</color>
+    <color name="wear_brand">#A23E2F</color>
+    <color name="wear_ink">#FFF1EC</color>
+    <color name="wear_bar">#FAAA9D</color>
+</resources>

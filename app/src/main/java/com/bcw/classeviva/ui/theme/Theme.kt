@@ -108,13 +108,13 @@ private val darkTones = listOf(
     ToneColors(c(0xffb4a9), c(0x690002), c(0x8a1c14), c(0xffdad5)),
     ToneColors(c(0xaac9ef), c(0x0f3251), c(0x2a4969), c(0xd1e4ff)),
 )
-private val lightSubjects = listOf(
+internal val lightSubjects = listOf(
     0x9e412b to (0xffdad2 to 0x3d0600), 0x29685f to (0xafefe2 to 0x00201c), 0x5357a0 to (0xe1e0ff to 0x0c0e5a),
     0x7c5808 to (0xffdea9 to 0x271900), 0x854a78 to (0xffd7f1 to 0x370531), 0x306388 to (0xcce5ff to 0x001e31),
     0x4c671d to (0xcdee94 to 0x131f00), 0x99452f to (0xffdad2 to 0x3c0800), 0x6b5c4a to (0xf4dfc9 to 0x241a0c),
     0x136779 to (0xadecff to 0x001f26), 0x944555 to (0xffd9de to 0x3e0215), 0x47663c to (0xc8edb7 to 0x042101),
 ).map { (a, b) -> SubjectColors(c(a.toLong()), c(b.first.toLong()), c(b.second.toLong())) }
-private val darkSubjects = listOf(
+internal val darkSubjects = listOf(
     0xffb4a3 to (0x7f2a17 to 0xffdad2), 0x94d2c7 to (0x055047 to 0xafefe2), 0xbfc1ff to (0x3b3f86 to 0xe1e0ff),
     0xefbf6a to (0x5e4100 to 0xffdea9), 0xf8b0e4 to (0x6a335f to 0xffd7f1), 0x9cccf6 to (0x114b6f to 0xcce5ff),
     0xb1d27b to (0x354e04 to 0xcdee94), 0xffb4a2 to (0x7b2e1a to 0xffdad2), 0xd7c3ae to (0x524434 to 0xf4dfc9),
@@ -294,6 +294,9 @@ fun generatedTheme(accent: String, style: ColorStyle, contrast: ContrastLevel): 
     themeCache.getOrPut(Triple(accent, style, contrast)) { ColorEngine.build(accent, style, contrast) }
 }
 
+/** Colore fisso degli intervalli. */
+internal fun breakTintFor(dark: Boolean): Color = if (dark) c(0xb8ac98) else c(0x9a8c78)
+
 /** Colori di BCW per un tema (anche fuori dalle viste, es. per i widget). */
 fun bcwColors(context: android.content.Context, settings: ThemeSettings, dark: Boolean): BCWColors {
     val tones = if (dark) darkTones else lightTones
@@ -323,7 +326,7 @@ fun bcwColors(context: android.content.Context, settings: ThemeSettings, dark: B
     }
     return BCWColors(
         scheme = scheme, isDark = dark, good = tones[0], fair = tones[1], poor = tones[2], neutral = tones[3],
-        subjects = subjects, breakTint = if (dark) c(0xb8ac98) else c(0x9a8c78), brand = brand, shadow = shadow,
+        subjects = subjects, breakTint = breakTintFor(dark), brand = brand, shadow = shadow,
         scrim = shadow.copy(alpha = if (dark) 0.55f else 0.38f),
     )
 }

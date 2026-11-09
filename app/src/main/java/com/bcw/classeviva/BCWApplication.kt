@@ -8,6 +8,7 @@ import com.bcw.classeviva.platform.BackgroundRefresh
 import com.bcw.classeviva.platform.LiveUpdates
 import com.bcw.classeviva.platform.Notifier
 import com.bcw.classeviva.platform.ReminderScheduler
+import com.bcw.classeviva.platform.WearSync
 import com.bcw.classeviva.widget.Widgets
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -44,10 +45,13 @@ class BCWApplication : Application() {
                     Widgets.updateAll(this@BCWApplication)
                     LiveUpdates.refresh(this@BCWApplication)
                     BackgroundRefresh.schedule(this@BCWApplication, model)
+                    WearSync.timetableChanged(this@BCWApplication, model.timetable, model.preferences)
                 }
             }
         }
         // All'avvio in background (widget, notifiche) solo la cache: l'aggiornamento parte aprendo l'app.
         model.bootstrap(refresh = false)
+        // Anche se l'orologio non ha chiesto nulla, l'ultimo orario gli resta a disposizione.
+        WearSync.pushNow(this, model.timetable, model.preferences)
     }
 }
