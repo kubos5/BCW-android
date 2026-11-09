@@ -183,18 +183,35 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
         val ui = LocalUi.current
         ListGroup { item { ButtonRow("Rivedi l'introduzione", "sparkles", { ui.presentOnboarding() }) } }
     }
-    block("github") {
-        val ui = LocalUi.current
-        val items = listOf(
-            Triple("BCW", "L'app per iPhone e iPad (repository principale)", "github" to "https://github.com/kubos5/BCW/"),
-            Triple("BCW-android", "L'app per Android", "github" to "https://github.com/kubos5/BCW-android/"),
-            Triple("BCW-web", "La versione web", "globe" to "https://github.com/kubos5/BCW-web/"),
-            Triple("BCW-api", "Il server degli account BCW", "server" to "https://github.com/kubos5/BCW-api/"),
-            Triple("kubos5", "Il profilo dell'autore su GitHub", "person" to "https://github.com/kubos5/"),
-        )
-        ListGroup(header = "Su GitHub") {
-            for ((title, subtitle, pair) in items) item(title) {
-                ListRow(title, subtitle = subtitle, leading = { FormIcon(pair.first) }, onClick = { ui.openUrl(pair.second) }, trailing = { Icon("externalLink", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) })
+    block("github") { GithubSection() }
+}
+
+private data class GithubLink(val title: String, val subtitle: String, val icon: String, val url: String)
+
+/** Le tre versioni di BCW, poi il backend e l'autore, in gruppi a parte (come Impostazioni > Generale > Su GitHub del web 3.3.1). */
+private val githubLinkGroups = listOf(
+    listOf(
+        GithubLink("BCW", "BCW per iOS", "ios", "https://github.com/kubos5/BCW"),
+        GithubLink("BCW-web", "BCW per Web", "globe", "https://github.com/kubos5/BCW-web"),
+        GithubLink("BCW-android", "BCW per Android", "android", "https://github.com/kubos5/BCW-android"),
+    ),
+    listOf(GithubLink("BCW-api", "Backend", "api", "https://github.com/kubos5/BCW-api")),
+    listOf(GithubLink("kubos5", "Autore di BCW <3", "favorite", "https://github.com/kubos5")),
+)
+
+@Composable
+private fun GithubSection() {
+    val ui = LocalUi.current
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        githubLinkGroups.forEachIndexed { index, links ->
+            ListGroup(header = if (index == 0) "Su GitHub" else null) {
+                for (link in links) item(link.title) {
+                    ListRow(
+                        link.title, subtitle = link.subtitle, leading = { FormIcon(link.icon) },
+                        onClick = { ui.openUrl(link.url) },
+                        trailing = { Icon("externalLink", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) },
+                    )
+                }
             }
         }
     }

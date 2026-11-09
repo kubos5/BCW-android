@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import com.bcw.classeviva.BCWApplication
 import com.bcw.classeviva.MainActivity
 import androidx.test.core.app.ApplicationProvider
@@ -166,6 +167,42 @@ class AppUiTest {
         settle(2000)
         shot("onboarding-12-app")
         check(!model.timetable.isEmpty) { "L'orario dell'introduzione non è stato applicato" }
+    }
+
+    /** La schermata di accesso riapre l'introduzione (3.3.1, come la versione web). */
+    @Test
+    fun loginIntroLink() {
+        settle(3000)
+        click("Salta introduzione")
+        settle(1200)
+        shot("login-01")
+        check(rule.onAllNodesWithText("Rivedi l'introduzione").fetchSemanticsNodes().isNotEmpty()) { "Manca «Rivedi l'introduzione» nell'accesso" }
+        click("Rivedi l'introduzione")
+        settle(2000)
+        shot("login-02-intro")
+        check(rule.onAllNodesWithText("Inizia").fetchSemanticsNodes().isNotEmpty()) { "L'introduzione non si è riaperta" }
+        click("Salta introduzione")
+        settle(1500)
+        check(rule.onAllNodesWithText("Rivedi l'introduzione").fetchSemanticsNodes().isNotEmpty()) { "Dopo l'introduzione non si torna all'accesso" }
+    }
+
+    /** Impostazioni > Generale > Su GitHub: tre versioni, backend e autore in gruppi separati (3.3.1). */
+    @Test
+    fun settingsGithubGroups() {
+        startDemo()
+        rule.onNode(hasText("Tu") and hasClickAction()).performClick()
+        settle()
+        clickDescription("Impostazioni")
+        settle()
+        click("Generale")
+        waitForText("Sicurezza")
+        settle()
+        rule.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(4)
+        settle()
+        shot("settings-github")
+        for (title in listOf("BCW", "BCW-web", "BCW-android", "BCW-api", "kubos5")) {
+            check(rule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()) { "Manca «$title» in Su GitHub" }
+        }
     }
 
     /** Salta l'introduzione e apre la demo. */
