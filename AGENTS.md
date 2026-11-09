@@ -288,8 +288,9 @@ Una riga per ogni versione raggiunta. Riempila al passo 7.
 | Android | iOS (tag) | Web (commit "Versione …") | Data | Note |
 | --- | --- | --- | --- | --- |
 | 3.3 | v3.3 | "Versione 3.3" | 08/11/2026 | Versione iniziale di BCW per Android. Punto di partenza dichiarato dal `versionName`; verificare al primo allineamento quale commit del web corrisponde |
+| 3.3.1 | v3.3.1 | "Versione 3.3.1" | 09/11/2026 | "Rivedi l'introduzione" nell'accesso e sezione "Su GitHub" in gruppi, con le icone iOS, Android, backend e autore |
 
-Da portare dopo la 3.3: tutto ciò che iOS e web hanno aggiunto con la 3.3.1. Controllalo al passo 2, perché alcune voci (per esempio "Rivedi l'introduzione" e la sezione GitHub nelle impostazioni) sono già presenti nel codice Android.
+Dopo la 3.3.1 non resta niente da recuperare: la versione di iOS e web è portata. Quando esce una nuova versione, ricomincia dal passo 2.
 
 ## 8. Come contribuire
 
