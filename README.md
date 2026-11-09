@@ -90,11 +90,8 @@ Aggiorna BCW-android con le ultime novità della repo principale kubos5/BCW.
 4. Apri una pull request verso main con un titolo e una descrizione in italiano,
    una funzione per PR, dicendo cosa hai portato dalla repo principale e come l'hai
    adattata ad Android.
-```
-inoltre
 
-```
-Per facilitare il processo, ho deciso di aggiungere il file AGENTS.md, contenente indicazioni chiare perchè l'agente di codice possa avere una maggiore comprensione del contesto.
+5. Per facilitare il processo, ho deciso di aggiungere il file AGENTS.md, contenente indicazioni chiare perchè l'agente di codice possa avere una maggiore comprensione del contesto.
 ```
 ## Licenza
 
