@@ -1,29 +1,26 @@
 <p align="center">
-  <img src="docs/android.gif" alt="BCW — Better ClasseViVa per Android" />
+  <img width="1920" height="480" alt="android" src="https://github.com/user-attachments/assets/034ce1b3-8d7f-42b1-b4a3-6386543a0716" />
 </p>
 
-<h1 align="center">BCW per Android</h1>
+
+<h1 align="center">BCW: Classeviva, in Material Design</h1>
 
 <p align="center">
-  <strong>Il registro elettronico Classeviva, ridisegnato.</strong><br/>
-  Material 3 Expressive, widget vivi, lezione in corso nella barra di stato — e la tua scuola, bella da guardare.
-</p>
-
-<p align="center">
-  <a href="https://github.com/kubos5/BCW">📱 Versione iPhone e iPad</a> ·
-  <a href="https://github.com/kubos5/BCW-web">🌐 Versione web</a> ·
-  <a href="https://github.com/kubos5/BCW-api">☁️ Account BCW</a>
+  <strong>Un client per iOS, Android e Web per il registro elettronico <a href="https://web.spaggiari.eu">Classeviva</a> di Spaggiari</strong>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots.png" alt="Schermate dell'app: Dashboard, Orario, Voti e Tu" width="900" />
+  BCW non è affiliata a Gruppo Spaggiari Parma S.p.A.
 </p>
 
----
+<p align="center">
+  <a href="https://github.com/kubos5/BCW">BCW per iOS</a> ·
+  <a href="https://github.com/kubos5/BCW-web">BCW per Web</a> ·
+  <strong><a href="https://github.com/kubos5/BCW-android">BCW per Android</a></strong> ·
+  <a href="https://github.com/kubos5/BCW-api">Backend</a>
+</p>
 
-> **BCW** significa *Better ClasseViVa*: tutte le funzioni del client ufficiale di [Classeviva](https://web.spaggiari.eu) (Gruppo Spaggiari Parma), più quelle che ti sarebbero utili davvero — obiettivo di media, compiti da spuntare, orario che si disegna da solo. Questa è la versione **Android**, nativa, con lo stesso account della versione per iPhone e quella web.
->
-> *BCW non è affiliato a Gruppo Spaggiari Parma S.p.A.*
+<br><br>
 
 ## Perché BCW
 
