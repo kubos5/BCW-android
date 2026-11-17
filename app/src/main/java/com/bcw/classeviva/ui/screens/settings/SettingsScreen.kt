@@ -194,6 +194,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
             else "BCW (Better ClasseViVa) è un client non ufficiale e non è affiliato a Gruppo Spaggiari Parma S.p.A. Le credenziali sono salvate cifrate solo su questo dispositivo e inviate esclusivamente ai server di Classeviva.",
         ) {
             item { ValueRow("Versione", VERSION) }
+            item { ValueRow("Ported by", "Mikqs") }
             item {
                 val scope = rememberCoroutineScope()
                 ListRow("Note di rilascio", subtitle = "Le novità di BCW", leading = { FormIcon("info") }, onClick = {
