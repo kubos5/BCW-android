@@ -137,6 +137,7 @@ import com.bcw.classeviva.ui.theme.normalizeHex
 import com.bcw.classeviva.util.plural
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -185,13 +186,35 @@ fun OnboardingScreen() {
     var draft by remember { mutableStateOf<TimetableDraft?>(null) }
     // Le ore scelte per l'orario restano tornando dall'anteprima.
     var generation by remember { mutableStateOf(model.timetable.timetable.generation) }
-    val steps = Step.entries.filter { it != Step.timetable || (prefs.showsTimetableTab && model.phase == Phase.signedIn) }
+    // C'è già un orario (sul dispositivo o nell'account BCW appena aperto): il passaggio non serve.
+    var hasTimetable by rememberSaveable { mutableStateOf(!model.timetable.isEmpty) }
+    var checkingTimetable by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val steps = Step.entries.filter {
+        it != Step.timetable || (prefs.showsTimetableTab && model.phase == Phase.signedIn && !hasTimetable)
+    }
     // Un passaggio sparito (l'orario, spegnendo la scheda) porta al successivo.
     val current = if (step in steps) step else steps.firstOrNull { it.ordinal > step.ordinal } ?: Step.done
     val index = steps.indexOf(current)
     val typing = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     fun go(delta: Int) {
+        // Prima del passaggio dell'orario si guarda se l'orario c'è già: con l'account BCW appena
+        // aperto può essere sul server e non ancora su questo dispositivo (al massimo 4 secondi).
+        if (delta > 0 && current == Step.bcw && prefs.showsTimetableTab && model.phase == Phase.signedIn) {
+            if (checkingTimetable) return
+            checkingTimetable = true
+            scope.launch {
+                withTimeoutOrNull(4_000) {
+                    val id = model.activeAccountID
+                    if (model.isCloud && !model.isDemo && id != null) model.sync.pullTimetableNow(id)
+                }
+                hasTimetable = !model.timetable.isEmpty
+                checkingTimetable = false
+                go(delta)
+            }
+            return
+        }
         val target = if (delta > 0) steps.firstOrNull { it.ordinal > current.ordinal } else steps.lastOrNull { it.ordinal < current.ordinal }
         if (target == null) return
         haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
