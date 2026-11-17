@@ -484,7 +484,7 @@ fun GeneratorSheet(onDismiss: () -> Unit) {
                 if (generating) LoadingIndicator(Modifier.size(24.dp), color = LocalContentColor.current) else Icon("wand", size = 20.dp)
                 Text("Crea l'anteprima", Modifier.padding(start = 8.dp), style = Theme.type.style(16, 600))
             }
-            ListFooter("BCW guarda in quale ora della giornata si è svolta ogni materia, settimana per settimana, e tiene quelle che si ripetono (le settimane recenti contano di più, supplenze e recuperi isolati vengono ignorati). Vedrai l'orario in anteprima prima di applicarlo.")
+            ListFooter("BCW guarda in quale ora si è svolta ogni materia, settimana per settimana, e tiene quelle che si ripetono, ignorando supplenze isolate. Vedrai l'anteprima prima di applicarla.")
         }
     }
 }

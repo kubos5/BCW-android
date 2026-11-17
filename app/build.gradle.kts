@@ -13,8 +13,8 @@ android {
         applicationId = "com.bcw.classeviva"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30301
-        versionName = "3.3.1"
+        versionCode = 40000
+        versionName = "4.0"
         vectorDrawables { useSupportLibrary = true }
     }
 

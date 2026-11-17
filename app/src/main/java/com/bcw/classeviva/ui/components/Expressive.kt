@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -214,9 +215,9 @@ fun StatusLine(text: String, icon: String, color: Color) {
 // MARK: - Card
 
 @Composable
-fun Card(modifier: Modifier = Modifier, padding: Dp = 16.dp, color: Color = Theme.scheme.surfaceContainer, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(Theme.radii.xl)
-    var m = modifier.fillMaxWidth().clip(shape).background(color)
+fun Card(modifier: Modifier = Modifier, padding: Dp = 16.dp, color: Color = Theme.scheme.surfaceContainer, shape: Shape? = null, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    val cardShape = shape ?: RoundedCornerShape(Theme.radii.xl)
+    var m = modifier.fillMaxWidth().clip(cardShape).background(color)
     if (onClick != null) m = m.clickable(onClick = onClick)
     Column(m.padding(padding), content = content)
 }

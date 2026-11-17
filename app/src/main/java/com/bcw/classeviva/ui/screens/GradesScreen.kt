@@ -339,8 +339,12 @@ fun SubjectDetailScreen(subjectId: Long) {
                 TrendChart(book.runningAverage(subjectId, period), height = 170.dp, domain = 2.0..10.0, ticks = listOf(2, 4, 6, 8, 10), color = color, dots = dots, area = false, lastDot = false)
             }
         }
-        block("goal") { GoalCalculator(list, book.weighted) }
-        block("sim") { GradeSimulator(book, period, subjectId = subjectId, suggestedSubject = null, collapsible = false) }
+        block("tools") {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                GoalCalculator(list, book.weighted, collapsible = true, connected = true)
+                GradeSimulator(book, period, subjectId = subjectId, suggestedSubject = null, collapsible = true, connected = true)
+            }
+        }
         block("header") { SectionHeader("Voti", subtitle = if (list.size == 1) "1 valutazione" else "${list.size} valutazioni") }
         block("list") {
             ListGroup {
@@ -350,38 +354,68 @@ fun SubjectDetailScreen(subjectId: Long) {
     }
 }
 
-/** "Quanto devo prendere?": voto necessario per raggiungere una media obiettivo. */
+/** "Quanto devo prendere?": voto necessario per raggiungere una media obiettivo. Comprimibile e chiusa
+ * all'inizio nella pagina di una materia; da chiusa il sottotitolo riassume il risultato.
+ * `corners` descrive gli angoli per le card collegate a "E se prendessi…": "inner" ha gli angoli in
+ * basso piccoli, "outer" (la card sotto) quelli in alto piccoli. */
 @Composable
-private fun GoalCalculator(list: List<Grade>, weighted: Boolean) {
+private fun GoalCalculator(list: List<Grade>, weighted: Boolean, collapsible: Boolean = false, connected: Boolean = false) {
     val model = LocalModel.current
     val prefs = model.preferences
     val target = prefs.targetAverage
     var upcoming by rememberSaveable { mutableIntStateOf(1) }
+    var open by rememberSaveable { mutableStateOf(false) }
     val needed = GradeBook.neededGrade(target, list, upcoming, weighted)
-    Card {
+    val r = Theme.radii
+    val shape = if (!connected) null else if (collapsible) RoundedCornerShape(
+        topStart = r.xl, topEnd = r.xl, bottomStart = r.xs, bottomEnd = r.xs,
+    ) else RoundedCornerShape(
+        topStart = r.xs, topEnd = r.xs, bottomStart = r.xl, bottomEnd = r.xl,
+    )
+    fun summary(): String? = when {
+        needed <= 1 -> "Media ${GradeFormat.short(target)} già raggiunta"
+        needed > 10 -> "Media ${GradeFormat.short(target)} non raggiungibile"
+        else -> "Per ${GradeFormat.short(target)} ti serve almeno ${GradeFormat.average(needed)}"
+    }
+    Card(shape = shape) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Shaped("cookie9Sided", Theme.scheme.primaryContainer, 44.dp) { Icon("target", size = 22.dp, tint = Theme.scheme.onPrimaryContainer) }
-                Column {
-                    Text("Obiettivo", style = Theme.type.style(16, 600), color = Theme.scheme.onSurface)
-                    Text("Quanto ti serve per arrivarci", style = Theme.type.style(13), color = Theme.scheme.onSurfaceVariant)
+            val heading = @Composable {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Shaped("cookie9Sided", Theme.scheme.primaryContainer, 44.dp) { Icon("target", size = 22.dp, tint = Theme.scheme.onPrimaryContainer) }
+                    Column {
+                        Text("Obiettivo", style = Theme.type.style(16, 600), color = Theme.scheme.onSurface)
+                        if (!collapsible || open) Text("Quanto ti serve per arrivarci", style = Theme.type.style(13), color = Theme.scheme.onSurfaceVariant)
+                        else summary()?.let { Text(it, style = Theme.type.style(13), color = Theme.scheme.onSurfaceVariant) }
+                    }
+                    if (collapsible) {
+                        Chevron(!open, rotateUp = true)
+                    }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Media desiderata", style = Theme.type.style(15), color = Theme.scheme.onSurface, modifier = Modifier.weight(1f))
-                Stepper(GradeFormat.short(target), { prefs.set("targetAverage", maxOf(4.0, target - 0.25)) }, { prefs.set("targetAverage", minOf(10.0, target + 0.25)) }, target > 4, target < 10)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Prossime prove", style = Theme.type.style(15), color = Theme.scheme.onSurface, modifier = Modifier.weight(1f))
-                Stepper(upcoming.toString(), { upcoming = maxOf(1, upcoming - 1) }, { upcoming = minOf(5, upcoming + 1) }, upcoming > 1, upcoming < 5)
-            }
-            HorizontalDivider(color = Theme.scheme.outlineVariant)
-            when {
-                needed <= 1 -> StatusLine("Hai già raggiunto l'obiettivo, qualunque voto prenderai.", "checkSealFill", Theme.colors.good.color)
-                needed > 10 -> StatusLine("Obiettivo non raggiungibile con ${if (upcoming == 1) "una prova" else "$upcoming prove"}.", "octagonX", Theme.colors.poor.color)
-                else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (upcoming == 1) "Ti serve almeno" else "Ti serve in media almeno", style = Theme.type.style(15), color = Theme.scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    Text(GradeFormat.average(needed), style = Theme.type.numeral(28), color = tone(gradeTone(needed)).color)
+            if (collapsible) Row(
+                Modifier.fillMaxWidth().clickable { open = !open },
+                verticalAlignment = Alignment.CenterVertically,
+                content = { heading() },
+            ) else heading()
+            Collapsible(!collapsible || open) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Media desiderata", style = Theme.type.style(15), color = Theme.scheme.onSurface, modifier = Modifier.weight(1f))
+                        Stepper(GradeFormat.short(target), { prefs.set("targetAverage", maxOf(4.0, target - 0.25)) }, { prefs.set("targetAverage", minOf(10.0, target + 0.25)) }, target > 4, target < 10)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Prossime prove", style = Theme.type.style(15), color = Theme.scheme.onSurface, modifier = Modifier.weight(1f))
+                        Stepper(upcoming.toString(), { upcoming = maxOf(1, upcoming - 1) }, { upcoming = minOf(5, upcoming + 1) }, upcoming > 1, upcoming < 5)
+                    }
+                    HorizontalDivider(color = Theme.scheme.outlineVariant)
+                    when {
+                        needed <= 1 -> StatusLine("Hai già raggiunto l'obiettivo, qualunque voto prenderai.", "checkSealFill", Theme.colors.good.color)
+                        needed > 10 -> StatusLine("Obiettivo non raggiungibile con ${if (upcoming == 1) "una prova" else "$upcoming prove"}.", "octagonX", Theme.colors.poor.color)
+                        else -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (upcoming == 1) "Ti serve almeno" else "Ti serve in media almeno", style = Theme.type.style(15), color = Theme.scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            Text(GradeFormat.average(needed), style = Theme.type.numeral(28), color = tone(gradeTone(needed)).color)
+                        }
+                    }
                 }
             }
         }
@@ -405,7 +439,7 @@ class SimulatorState {
  * dell'anno. Nulla viene salvato.
  */
 @Composable
-private fun GradeSimulator(book: GradeBook, period: Int?, subjectId: Long?, suggestedSubject: Long?, collapsible: Boolean) {
+private fun GradeSimulator(book: GradeBook, period: Int?, subjectId: Long?, suggestedSubject: Long?, collapsible: Boolean, connected: Boolean = false) {
     val model = LocalModel.current
     val s = if (subjectId == null) rememberInSession("sim:grades:${model.cacheOwner}") { SimulatorState() } else remember(subjectId) { SimulatorState() }
     val subjects = model.allSubjectNames()
@@ -413,7 +447,11 @@ private fun GradeSimulator(book: GradeBook, period: Int?, subjectId: Long?, sugg
     val target = subjectId ?: s.chosen?.takeIf(::known) ?: suggestedSubject?.takeIf(::known) ?: subjects.firstOrNull()?.first
     fun nameOf(id: Long) = subjects.firstOrNull { it.first == id }?.second ?: "Materia"
 
-    Card {
+    val r = Theme.radii
+    val shape = if (!connected) null else RoundedCornerShape(
+        topStart = r.xs, topEnd = r.xs, bottomStart = r.xl, bottomEnd = r.xl,
+    )
+    Card(shape = shape) {
         Row(
             Modifier.fillMaxWidth().then(if (collapsible) Modifier.clip(RoundedCornerShape(Theme.radii.m)).clickable { s.open = !s.open } else Modifier),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -261,7 +261,7 @@ fun TimetableBackupSection() {
             }
             val lessons = backup.timetable.entries.count { !it.isBreak }
             ui.ask("Importare il backup?", "Il backup ha $lessons lezioni${if (backup.files.isNotEmpty()) " e ${backup.files.size} file" else ""}. L'orario attuale verrà sostituito.", "Continua") {
-                ui.ask("Sostituire l'orario attuale?", "Eventi, colori, note, file e verifiche segnate dell'orario attuale verranno eliminati. L'operazione non si può annullare.", "Sostituisci", destructive = true) {
+                ui.ask("Sostituire l'orario attuale?", "L'orario attuale, con note, file, verifiche, colori e palette, verrà eliminato per sempre. Se vuoi conservarlo, annulla ed esportane prima un backup.", "Sostituisci", destructive = true) {
                     scope.launch {
                         try {
                             store.restore(backup)
@@ -276,7 +276,7 @@ fun TimetableBackupSection() {
     }
     ListGroup(
         header = "Backup dell'orario",
-        footer = "${if (synced) "L'orario di ogni account abbinato si sincronizza con il tuo account BCW." else "L'orario è salvato solo su questo dispositivo, separato per ogni account."} Il backup contiene eventi, colori, palette, note, verifiche segnate e file allegati; importandolo sostituisce l'orario attuale. È compatibile con l'app BCW per iPhone e con la versione web.",
+        footer = "${if (synced) "L'orario si sincronizza con il tuo account BCW." else "L'orario è salvato solo su questo dispositivo."} Il backup contiene eventi, colori, note e file; importarlo sostituisce l'orario attuale. È compatibile con la versione web.",
     ) {
         item { ButtonRow("Esporta un backup dell'orario", "upload", { exporter.launch("Orario BCW.json") }, enabled = hasOwner) }
         item { ButtonRow("Importa un backup…", "download", { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, enabled = hasOwner) }
