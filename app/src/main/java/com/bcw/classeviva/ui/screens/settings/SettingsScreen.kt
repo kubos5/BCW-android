@@ -167,6 +167,24 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
             }) }
         }
     }
+    block("updates") {
+        val model = LocalModel.current
+        val ui = LocalUi.current
+        val prefs = model.preferences
+        val scope = rememberCoroutineScope()
+        ListGroup(header = "Aggiornamenti", footer = "Cerca una versione più recente nelle release di GitHub e aggiorna l'app dentro a BCW.") {
+            item { ToggleRow("Avvisami delle nuove versioni", prefs.updateAlerts, { prefs.set("updateAlerts", it) }, icon = "download") }
+            item {
+                ListRow("Cerca aggiornamenti", leading = { FormIcon("info") }, onClick = {
+                    scope.launch {
+                        val release = ui.updates.latestUpdate()
+                        if (release == null) ui.toast("BCW è aggiornata.")
+                        else ui.updateRelease = release
+                    }
+                }, trailing = { Icon("chevronRight", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) })
+            }
+        }
+    }
     block("about") {
         val model = LocalModel.current
         val ui = LocalUi.current

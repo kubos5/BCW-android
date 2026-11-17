@@ -54,6 +54,8 @@ class UiController(val context: Context, val scope: CoroutineScope) {
     var linkCandidates by mutableStateOf<List<com.bcw.classeviva.data.SavedAccount>>(emptyList())
     /** Note di rilascio da mostrare (dopo un aggiornamento o da Impostazioni › Generale). */
     var releaseSheet by mutableStateOf<com.bcw.classeviva.data.ReleaseInfo?>(null)
+    /** Una versione più recente su GitHub, da aggiornare (o rinviare) nel foglio. */
+    var updateRelease by mutableStateOf<com.bcw.classeviva.data.ReleaseInfo?>(null)
     val updates = com.bcw.classeviva.data.UpdateCenter(context)
 
     fun toast(message: String) {

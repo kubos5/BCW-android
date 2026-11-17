@@ -59,6 +59,7 @@ import com.bcw.classeviva.ui.components.BCWLogo
 import com.bcw.classeviva.ui.components.ButtonRow
 import com.bcw.classeviva.ui.components.ListGroup
 import com.bcw.classeviva.ui.components.ReleaseSheet
+import com.bcw.classeviva.ui.components.UpdateSheet
 import com.bcw.classeviva.ui.nav.Navigator
 import com.bcw.classeviva.ui.screens.login.AddAccountSheet
 import com.bcw.classeviva.ui.screens.login.LoginScreen
@@ -103,6 +104,12 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
     LaunchedEffect(model.phase, ui.onboarding, lock.locked) {
         if (model.phase == Phase.launching || ui.onboarding || lock.locked || ui.releaseSheet != null) return@LaunchedEffect
         ui.releaseSheet = ui.updates.pendingNotes()
+    }
+    // Versione più recente su GitHub (ogni 12 ore, rispettando "Più tardi"): le note della release nuova.
+    LaunchedEffect(model.phase, ui.onboarding, lock.locked, ui.releaseSheet) {
+        if (model.phase != Phase.signedIn || ui.onboarding || lock.locked || ui.releaseSheet != null) return@LaunchedEffect
+        val release = ui.updates.automaticCheck(model.preferences.updateAlerts) ?: return@LaunchedEffect
+        ui.updateRelease = release
     }
     val settings = ThemeSettings.from(model.preferences).copy(monochrome = ui.onboarding && ui.monochrome)
     // Memoria delle pagine per sessione (account o demo): cambiando sessione si azzera.
@@ -246,6 +253,14 @@ private fun Overlays() {
     if (ui.accountSwitcher) AccountSwitcherSheet { ui.accountSwitcher = false }
     if (ui.addAccount) AddAccountSheet { ui.addAccount = false }
     ui.releaseSheet?.let { release -> ReleaseSheet(release) { ui.releaseSheet = null } }
+    ui.updateRelease?.let { release ->
+        UpdateSheet(
+            release,
+            onSnooze = { ui.updates.snooze(release) },
+            onDisableAlerts = { model.preferences.set("updateAlerts", false) },
+            onDismiss = { ui.updateRelease = null },
+        )
+    }
     ui.viewer?.let { FileViewer(it) { ui.viewer = null } }
     val candidates = ui.linkCandidates
     if (candidates.isNotEmpty() && model.isCloud) {

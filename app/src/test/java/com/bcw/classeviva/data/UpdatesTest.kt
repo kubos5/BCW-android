@@ -43,6 +43,16 @@ class UpdatesTest {
         assertEquals(listOf("v3.3.1", "v3.3"), releases.published().map { it.tag })
     }
 
+    @Test fun checkIntervalAndSnooze() {
+        val now = 1_000_000_000L
+        assertTrue(UpdateCenter.checkDue(0L, UpdateCenter.CHECK_INTERVAL_MS, now))
+        assertFalse(UpdateCenter.checkDue(now - UpdateCenter.CHECK_INTERVAL_MS + 1, UpdateCenter.CHECK_INTERVAL_MS, now))
+        assertTrue(UpdateCenter.checkDue(now - UpdateCenter.CHECK_INTERVAL_MS, UpdateCenter.CHECK_INTERVAL_MS, now))
+        assertTrue(UpdateCenter.isSnoozed("v4.0", "v4.0", now + UpdateCenter.SNOOZE_MS, now))
+        assertFalse(UpdateCenter.isSnoozed("v4.0", null, now + UpdateCenter.SNOOZE_MS, now))
+        assertFalse(UpdateCenter.isSnoozed("v4.0", "v4.0", now, now))
+    }
+
     @Test fun markdownBlocks() {
         val blocks = releaseBlocks(
             """

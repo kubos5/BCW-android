@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo nella build di debug: la prova dell'aggiornamento con un server locale (`adb reverse`) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/network_security_debug" />
+</manifest>
