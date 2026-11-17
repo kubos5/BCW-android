@@ -52,6 +52,9 @@ class UiController(val context: Context, val scope: CoroutineScope) {
     internal var revealer: (Offset?, () -> Unit) -> Unit = { _, change -> change() }
     /** Account del dispositivo da abbinare dopo l'accesso all'account BCW. */
     var linkCandidates by mutableStateOf<List<com.bcw.classeviva.data.SavedAccount>>(emptyList())
+    /** Note di rilascio da mostrare (dopo un aggiornamento o da Impostazioni › Generale). */
+    var releaseSheet by mutableStateOf<com.bcw.classeviva.data.ReleaseInfo?>(null)
+    val updates = com.bcw.classeviva.data.UpdateCenter(context)
 
     fun toast(message: String) {
         scope.launch {

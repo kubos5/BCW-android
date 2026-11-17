@@ -176,6 +176,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
             else "BCW (Better ClasseViVa) è un client non ufficiale e non è affiliato a Gruppo Spaggiari Parma S.p.A. Le credenziali sono salvate cifrate solo su questo dispositivo e inviate esclusivamente ai server di Classeviva.",
         ) {
             item { ValueRow("Versione", VERSION) }
+            item {
+                val scope = rememberCoroutineScope()
+                ListRow("Note di rilascio", subtitle = "Le novità di BCW", leading = { FormIcon("info") }, onClick = {
+                    scope.launch {
+                        ui.updates.latestNotes().fold(
+                            onSuccess = { release -> if (release != null) ui.releaseSheet = release else ui.toast("Non ci sono ancora note di rilascio su GitHub") },
+                            onFailure = { ui.toast("Non riesco a contattare GitHub: riprova più tardi") },
+                        )
+                    }
+                }, trailing = { Icon("chevronRight", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) })
+            }
             item { ListRow("Apri Classeviva sul web", leading = { FormIcon("compass") }, onClick = { ui.openUrl("https://web.spaggiari.eu") }, trailing = { Icon("externalLink", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) }) }
         }
     }
