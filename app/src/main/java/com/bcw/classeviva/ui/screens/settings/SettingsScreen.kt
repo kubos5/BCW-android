@@ -226,7 +226,10 @@ private val githubLinkGroups = listOf(
         GithubLink("BCW-android", "BCW per Android", "android", "https://github.com/kubos5/BCW-android"),
     ),
     listOf(GithubLink("BCW-api", "Backend", "api", "https://github.com/kubos5/BCW-api")),
-    listOf(GithubLink("kubos5", "Autore di BCW <3", "favorite", "https://github.com/kubos5")),
+    listOf(
+        GithubLink("kubos5", "Autore di BCW <3", "favorite", "https://github.com/kubos5"),
+        GithubLink("mikqsdev", "Contributore di BCW per Android", "volunteer", "https://github.com/mikqsdev"),
+    ),
 )
 
 @Composable
@@ -514,10 +517,10 @@ private fun TimetablePane() {
     val store = model.timetable
     val synced = model.isCloud && p.syncs(SyncCategory.timetable)
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        ListGroup(header = "Scheda", footer = "Nascosta, la scheda Orario sparisce dalla barra di navigazione. L'orario resta${if (synced) " e si sincronizza ancora con l'account BCW" else ""}: widget e lezione in corso continuano a usarlo. Per riaverla torna qui (Impostazioni, dall'ingranaggio in Tu).") {
+        ListGroup(header = "Scheda", footer = "Nascosta, la scheda sparisce dalla barra, ma widget e lezione in corso continuano a usare l'orario. Per riaverla torna qui.") {
             item { ToggleRow("Mostra la scheda Orario", p.showsTimetableTab, { p.set("showsTimetableTab", it) }, icon = "timetable") }
         }
-        ListGroup(header = "Vista e allineamento", footer = "Di serie la vista Lista segna le verifiche di Classeviva e quelle segnate a mano; spegnendo \"Mostra le verifiche\" restano nel dettaglio dell'evento e nella vista Giorno. L'allineamento vale per tutto l'orario. Automatico: gli eventi iniziano all'ora o alla mezz'ora e durano 30 minuti o un'ora. Libero: qualsiasi orario e durata. Gli intervalli si posizionano sempre liberamente.") {
+        ListGroup(header = "Vista e allineamento", footer = "Automatico: gli eventi iniziano all'ora o alla mezz'ora e durano 30 o 60 minuti. Libero: qualsiasi orario e durata. Le verifiche nascoste sono nel menu ⋯ dell'orario.") {
             item {
                 ListRow("Allineamento", leading = { FormIcon(store.alignment.icon) }, trailing = {
                     SelectButton(TTAlignment.entries.map { it to it.shortTitle }, store.alignment, { requestAlignment(ui, store, it) })
@@ -525,7 +528,7 @@ private fun TimetablePane() {
             }
             item { ToggleRow("Mostra le verifiche nella lista", p.timetableShowsTests, { p.set("timetableShowsTests", it) }, icon = "test") }
         }
-        ListGroup(header = "Oggi", footer = "La card in cima all'orario di oggi mostra l'evento in corso con il tempo che manca, o il prossimo. La lezione in corso nelle notifiche (come le attività in diretta dell'iPhone) si aggiorna da sola durante la giornata.") {
+        ListGroup(header = "Oggi", footer = "La card mostra l'evento in corso o il prossimo, con il tempo che manca. Nascosta, la lezione in corso parte comunque da sola se è attiva qui sotto.") {
             item { ToggleRow("Card dell'evento in corso", p.timetableShowsNowCard, { p.set("timetableShowsNowCard", it) }, icon = "schedule", subtitle = "In cima all'orario di oggi") }
             item { ToggleRow("Lezione in corso nelle notifiche", p.liveUpdates, { on -> p.set("liveUpdates", on); com.bcw.classeviva.platform.LiveUpdates.refresh(ui.context) }, icon = "timer", subtitle = "Solo su questo dispositivo") }
         }
@@ -587,7 +590,7 @@ private fun NotificationsPane() {
             }
             item { ButtonRow("Esporta l'agenda nel calendario", "calendarPlus", { com.bcw.classeviva.ui.screens.exportAgenda(model, ui) }) }
         }
-        ListGroup(header = "Novità", footer = "Una notifica per ogni novità trovata aggiornando i dati, anche con BCW chiusa: Android controlla più o meno ogni ora, quando c'è la connessione. La prima volta BCW ricorda ciò che c'è già senza notificarlo.") {
+        ListGroup(header = "Novità", footer = "Una notifica per ogni novità, anche con BCW in secondo piano. È Android a decidere quando aggiornare: possono arrivare con un po' di ritardo. La prima volta BCW ricorda ciò che c'è già senza notificarlo.") {
             for (kind in NewsKind.entries) item(kind) {
                 ToggleRow(kind.title, p.newsEnabled(kind), { on ->
                     if (on) withPermission { p.setNews(kind, true); com.bcw.classeviva.platform.BackgroundRefresh.schedule(context, model) }
