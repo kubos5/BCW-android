@@ -58,6 +58,7 @@ import com.bcw.classeviva.data.Phase
 import com.bcw.classeviva.ui.components.BCWLogo
 import com.bcw.classeviva.ui.components.ButtonRow
 import com.bcw.classeviva.ui.components.ListGroup
+import com.bcw.classeviva.ui.components.ReleaseSheet
 import com.bcw.classeviva.ui.nav.Navigator
 import com.bcw.classeviva.ui.screens.login.AddAccountSheet
 import com.bcw.classeviva.ui.screens.login.LoginScreen
@@ -95,7 +96,13 @@ fun BCWRoot(model: AppModel, lock: LockState, onUnlock: () -> Unit, onSystemBars
                 ui.monochrome = true
                 ui.onboarding = true
             }
+            ui.updates.onLaunch(first)
         }
+    }
+    // Dopo un aggiornamento le note della versione nuova, a app pronta (mai sopra l'introduzione o il blocco).
+    LaunchedEffect(model.phase, ui.onboarding, lock.locked) {
+        if (model.phase == Phase.launching || ui.onboarding || lock.locked || ui.releaseSheet != null) return@LaunchedEffect
+        ui.releaseSheet = ui.updates.pendingNotes()
     }
     val settings = ThemeSettings.from(model.preferences).copy(monochrome = ui.onboarding && ui.monochrome)
     // Memoria delle pagine per sessione (account o demo): cambiando sessione si azzera.
@@ -238,6 +245,7 @@ private fun Overlays() {
     }
     if (ui.accountSwitcher) AccountSwitcherSheet { ui.accountSwitcher = false }
     if (ui.addAccount) AddAccountSheet { ui.addAccount = false }
+    ui.releaseSheet?.let { release -> ReleaseSheet(release) { ui.releaseSheet = null } }
     ui.viewer?.let { FileViewer(it) { ui.viewer = null } }
     val candidates = ui.linkCandidates
     if (candidates.isNotEmpty() && model.isCloud) {
