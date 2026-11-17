@@ -29,6 +29,7 @@ Licenza MIT. Nome del pacchetto: `com.bcw.classeviva` (la build debug aggiunge i
 8. Non usare mai credenziali Classeviva vere in test, screenshot o commit. Per provare l'app usa la modalità demo.
 9. Non committare `local.properties`, keystore (`*.jks`, `*.keystore`), APK o AAB: sono già in `.gitignore`.
 10. Se un comportamento nella specifica non è chiaro o iOS e web si contraddicono, non scegliere in silenzio: scrivilo nella descrizione della PR.
+11. BCW+ non esiste su BCW Android. Le funzioni BCW+ di iOS (acquisto unico, paywall, sblocco di orario, attività in diretta e widget nella build App Store, `PlusStore`, `PlusViews`, `PlusPaywallView`, banner di BCW+ nelle Impostazioni) non vanno portate. Questa repo resta gratuita e open source: tutto ciò che è sbloccabile su iOS è sempre sbloccato su Android. Vale per ogni versione futura.
 
 ## 3. Come funziona
 
@@ -326,6 +327,7 @@ Chi contribuisce con un agente AI deve rileggere il lavoro prima della PR: l'age
 - Android non ha un `CLAUDE.md` proprio: questo file è la guida unica. Gli strumenti che leggono solo `CLAUDE.md` possono usare un file che contenga `@AGENTS.md`.
 - L'app è fatta per studenti e famiglie: la privacy conta. Niente analytics, niente invio di dati a terzi, `allowBackup` spento, credenziali solo nel `SecureStore`.
 - Lo stile di lavoro con l'autore: quando una scelta di design o di comportamento è una richiesta esplicita dell'utente, in iOS e nel web è annotata nel `CLAUDE.md` con la dicitura "richiesta dell'utente" o "scelta dell'utente". Su Android vanno rispettate come le altre.
+- Aggiornamenti di questo file: quando è disponibile una nuova versione di AGENTS.md, l'agente chiede prima all'utente se scaricarla e sostituire quella locale. Non la sostituisce senza conferma. Dopo l'aggiornamento dice all'utente cosa ha scaricato e cosa ha cancellato: nessuna modifica ai file avviene senza che l'utente ne sia informato.
 - Le funzioni "non verificate con un account reale" (elencate in `CLAUDE.md` di iOS) sono nello stesso stato su Android: se le provi con un account vero, dillo nella PR.
 
 ## 10. Link utili
