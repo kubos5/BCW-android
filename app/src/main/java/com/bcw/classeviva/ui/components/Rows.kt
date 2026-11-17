@@ -107,6 +107,10 @@ fun AgendaEventRow(
                 if (showsDate) add(Fmt.relativeDayName(event.day))
                 if (event.kind != AgendaKind.homework) add(event.timeDescription)
                 if (event.authorName.isNotEmpty() && event.subjectName != null) add(event.authorName)
+                // I file e i link del docente di un compito del modulo Compiti si aprono dal sito di Classeviva.
+                if (event.attachments > 0) {
+                    add(if (event.attachments == 1) "1 allegato su Classeviva" else "${event.attachments} allegati su Classeviva")
+                }
             }
             if (meta.isNotEmpty()) RowCaption(meta.joinToString(" · "))
         }

@@ -149,12 +149,18 @@ private val testWords = listOf("verifica", "compito in classe", "interrogazion",
     "prova orale", "simulazione", "esame", "compito di", "verifiche")
 private val homeworkWords = listOf("per casa", "esercizi", "studiare", "pag.", "pagina", "leggere", "ripassare")
 
+/** Codice degli eventi che vengono dal modulo Compiti di Classeviva (`homeworks/index`). */
+const val HOMEWORK_MODULE_CODE = "NEWDC"
+
 data class AgendaEvent(
     val id: Long, val code: String, val begin: LocalDateTime, val end: LocalDateTime, val isFullDay: Boolean,
     val notes: String, val authorName: String, val classDescription: String?, val subjectId: Long?,
     val subjectName: String?, val homeworkId: Long?, val kind: AgendaKind,
+    /** File e link del docente di un compito del modulo Compiti: restano sul sito di Classeviva. */
+    val attachments: Int = 0,
 ) {
     val day: LocalDate get() = begin.toLocalDate()
+    val isFromHomeworkModule: Boolean get() = code == HOMEWORK_MODULE_CODE
     val title: String get() = subjectName ?: authorName.ifEmpty { "Evento" }
     val timeDescription: String
         get() = when {
@@ -171,7 +177,7 @@ fun parseAgendaEvent(c: JsonObject): AgendaEvent {
     val subjectName = c.str("subjectDesc").nilIfEmpty()?.sentenceCased()
     val text = notes.lowercase(Dates.italian)
     val kind = when {
-        code == "AGHW" -> AgendaKind.homework
+        code == "AGHW" || code == HOMEWORK_MODULE_CODE -> AgendaKind.homework
         testWords.any { text.contains(it) } -> AgendaKind.test
         code == "AGNT" && subjectName != null && homeworkWords.any { text.contains(it) } -> AgendaKind.homework
         else -> AgendaKind.event
@@ -185,6 +191,79 @@ fun parseAgendaEvent(c: JsonObject): AgendaEvent {
 }
 
 fun parseAgendaResponse(c: JsonElement) = (c as? JsonObject).list("agenda", ::parseAgendaEvent)
+
+/**
+ * Un compito del modulo Compiti di Classeviva (`homeworks/index`, codice NEWDC). I docenti possono
+ * assegnare compiti veri e propri, che non compaiono in `agenda/all`: in BCW diventano eventi
+ * dell'agenda di tipo compito, così compaiono in Dashboard, Agenda, ricerca, promemoria e widget.
+ */
+data class Homework(
+    val id: Long, val text: String, val teacherName: String, val subjectId: Long?, val subjectName: String?,
+    val assignedOn: LocalDate?, val due: LocalDateTime, val hasDueTime: Boolean, val isDone: Boolean,
+    val attachments: Int,
+)
+
+fun parseHomework(c: JsonObject): Homework? {
+    val day = Dates.parseDate(c.str("expiryDate")) ?: return null
+    val minutes = expiryMinutes(c.str("expiryTime"))
+    val text = (c.str("homeworkDesc") ?: "").trim()
+    return Homework(
+        id = c.int("evtId") ?: StableID.make(HOMEWORK_MODULE_CODE, text, Dates.dayKey(day)),
+        text = text, teacherName = c.str("teacherName").nameCased(), subjectId = c.int("subjectId"),
+        subjectName = c.str("subjectDesc").nilIfEmpty()?.sentenceCased(),
+        assignedOn = Dates.parseDate(c.str("assignmentDate")),
+        due = if (minutes != null) day.atStartOfDay().plusMinutes(minutes.toLong()) else day.atStartOfDay(),
+        hasDueTime = minutes != null, isDone = c.bool("homeworkMarkedDone") || c.bool("homeworkDone"),
+        attachments = ((c["teacherFiles"] as? JsonArray)?.size ?: 0) + ((c["teacherLinks"] as? JsonArray)?.size ?: 0),
+    )
+}
+
+/** "14:30" o "14:30:00" -> minuti dalla mezzanotte. */
+private fun expiryMinutes(value: String?): Int? {
+    val parts = value?.trim()?.split(':') ?: return null
+    if (parts.size < 2) return null
+    val hours = parts[0].toIntOrNull() ?: return null
+    val minutes = parts[1].toIntOrNull() ?: return null
+    if (hours !in 0..23 || minutes !in 0..59) return null
+    return hours * 60 + minutes
+}
+
+fun parseHomeworksResponse(c: JsonElement): List<Homework> {
+    val o = c as? JsonObject ?: return emptyList()
+    val items = o.list("items", ::parseHomework)
+    return items.ifEmpty { o.list("homeworks", ::parseHomework) }
+}
+
+/**
+ * Una risposta di `homeworks/index`: un oggetto con l'elenco dei compiti, anche vuoto. Distingue i
+ * compiti da una risposta qualsiasi (una pagina di errore, un JSON d'altro tipo).
+ */
+fun isValidHomeworks(c: JsonElement?): Boolean {
+    val o = c as? JsonObject ?: return false
+    return o["items"] is JsonArray || o["homeworks"] is JsonArray
+}
+
+/**
+ * Un compito del modulo Compiti come evento dell'agenda, nel giorno di consegna. L'id è negativo
+ * perché gli id dei compiti e quelli degli eventi dell'agenda sono numerati a parte e potrebbero
+ * coincidere (i compiti fatti, sincronizzati con l'account BCW, sono un elenco di id).
+ */
+fun homeworkEvent(h: Homework) = AgendaEvent(
+    id = -Math.abs(h.id), code = HOMEWORK_MODULE_CODE, begin = h.due, end = h.due, isFullDay = !h.hasDueTime,
+    notes = h.text, authorName = h.teacherName, classDescription = null, subjectId = h.subjectId,
+    subjectName = h.subjectName, homeworkId = h.id, kind = AgendaKind.homework, attachments = h.attachments,
+)
+
+/**
+ * Eventi di `agenda/all` più i compiti del modulo Compiti, in ordine. Un compito che l'agenda ha già
+ * (un evento AGHW con il suo `homeworkId`) non viene ripetuto.
+ */
+fun mergeAgenda(events: List<AgendaEvent>, homework: List<AgendaEvent>): List<AgendaEvent> {
+    if (homework.isEmpty()) return events.sortedBy { it.begin }
+    val linked = events.filterNot { it.isFromHomeworkModule }.mapNotNull { it.homeworkId }.toSet()
+    val extra = homework.filter { it.homeworkId == null || it.homeworkId !in linked }
+    return (events + extra).sortedBy { it.begin }
+}
 
 data class Lesson(
     val id: Long, val date: LocalDate, val code: String, val hour: Int, val duration: Double, val classDescription: String?,

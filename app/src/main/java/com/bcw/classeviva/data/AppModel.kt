@@ -102,6 +102,9 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
         private set
     var agenda by mutableStateOf<List<AgendaEvent>>(emptyList())
         private set
+    /** Le due fonti di `agenda`: `agenda/all` e `homeworks/index`, che arrivano a parte. */
+    private var agendaEvents: List<AgendaEvent> = emptyList()
+    private var agendaHomework: List<AgendaEvent> = emptyList()
     var absences by mutableStateOf<List<Absence>>(emptyList())
         private set
     var notices by mutableStateOf<List<Notice>>(emptyList())
@@ -154,7 +157,7 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
         grades = emptyList()
         periods = emptyList()
         subjects = emptyList()
-        agenda = emptyList()
+        updateAgenda(emptyList(), emptyList())
         absences = emptyList()
         notices = emptyList()
         notes = emptyList()
@@ -747,6 +750,7 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
         val periodsC = c.cached(::parsePeriodsResponse, "periods")
         val subjectsC = c.cached(::parseSubjectsResponse, "subjects")
         val agendaC = c.cached(::parseAgendaResponse, agendaPath)
+        val homeworkC = c.cached(::parseHomeworksResponse, ClassevivaClient.homeworkPath)
         val absencesC = c.cached(::parseAbsencesResponse, "absences/details")
         val noticesC = c.cached(::parseNoticeboardResponse, "noticeboard")
         val notesC = c.cached(::parseNotesResponse, "notes/all")
@@ -763,7 +767,9 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
             if (grades.isEmpty() && gradesC != null) grades = gradesC.sortedByDescending { it.date }
             if (periods.isEmpty() && periodsC != null) periods = periodsC
             if (subjects.isEmpty() && subjectsC != null) subjects = subjectsC
-            if (agenda.isEmpty() && agendaC != null) agenda = agendaC.sortedBy { it.begin }
+            if (agenda.isEmpty() && (agendaC != null || homeworkC != null)) {
+                updateAgenda(agendaC ?: emptyList(), homeworkC?.map(::homeworkEvent) ?: emptyList())
+            }
             if (absences.isEmpty() && absencesC != null) absences = absencesC.sortedByDescending { it.date }
             if (notices.isEmpty() && noticesC != null) notices = sortedNotices(noticesC)
             if (notes.isEmpty() && notesC != null) notes = notesC
@@ -880,8 +886,38 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
     }
 
     suspend fun loadAgenda() {
-        run(::parseAgendaResponse, agendaPath) { list -> agenda = list.sortedBy { it.begin } }
+        scope.async {
+            listOf(
+                async { run(::parseAgendaResponse, agendaPath) { list -> updateAgenda(events = list) } },
+                async { loadHomework() },
+            ).awaitAll()
+        }.await()
         rescheduleReminders()
+    }
+
+    /**
+     * I compiti del modulo Compiti di Classeviva (issue 16), che `agenda/all` non contiene. Se non
+     * arrivano restano quelli di prima, senza errori nel banner: è una fonte in più.
+     */
+    private suspend fun loadHomework() {
+        val c = client ?: return
+        val result = try {
+            c.homework()
+        } catch (e: Exception) {
+            return
+        }
+        if (c !== client) return
+        val items = result.value
+        preferences.importDoneHomework(items.filter { it.isDone }.map { -Math.abs(it.id) })
+        updateAgenda(homework = items.map(::homeworkEvent))
+    }
+
+    /** Unisce le due fonti dell'agenda (`null` = quella fonte non cambia). */
+    private fun updateAgenda(events: List<AgendaEvent>? = null, homework: List<AgendaEvent>? = null) {
+        if (events != null) agendaEvents = events
+        if (homework != null) agendaHomework = homework
+        agenda = mergeAgenda(agendaEvents, agendaHomework)
+        gradeBookCache = null
     }
 
     suspend fun loadAbsences() = run(::parseAbsencesResponse, "absences/details") { list -> absences = list.sortedByDescending { it.date } }
