@@ -73,6 +73,8 @@ class Preferences(private val store: SharedPreferences) {
             // Solo su Android, solo su questo dispositivo.
             "dynamicColor" to JsonPrimitive(false),
             "liveUpdates" to JsonPrimitive(true),
+            // Solo su questo dispositivo, come su iOS: compiti del modulo Compiti già presi da Classeviva.
+            "classevivaDoneHomework" to JsonArray(emptyList()),
         )
         val appearanceKeys = listOf("accentColor", "colorStyle", "contrast", "corners", "motion", "roundedText")
     }
@@ -190,6 +192,23 @@ class Preferences(private val store: SharedPreferences) {
     fun isCompleted(event: AgendaEvent) = event.id in completedSet
     private val completedSet: Set<Long> get() = longs("completedHomework").toSet()
     val completed: Set<Long> get() = completedSet
+
+    /**
+     * Compiti del modulo Compiti segnati come fatti su Classeviva: diventano fatti anche in BCW, una
+     * volta sola. Se poi si segnano da fare in BCW restano da fare (`classevivaDoneHomework`, solo su
+     * questo dispositivo, ricorda quelli già presi).
+     */
+    fun importDoneHomework(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        val imported = longs("classevivaDoneHomework").toMutableSet()
+        val fresh = ids.filter { it !in imported }
+        if (fresh.isEmpty()) return
+        imported += fresh
+        setLongs("classevivaDoneHomework", imported.toList())
+        val completed = longs("completedHomework").toMutableList()
+        val missing = fresh.filter { it !in completed }
+        if (missing.isNotEmpty()) setLongs("completedHomework", completed + missing)
+    }
 
     fun toggleCompleted(event: AgendaEvent) {
         val list = longs("completedHomework").toMutableList()

@@ -19,6 +19,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import com.bcw.classeviva.BCWApplication
 import com.bcw.classeviva.MainActivity
+import com.bcw.classeviva.util.Dates
+import com.bcw.classeviva.util.Fmt
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.Configuration
 import androidx.work.WorkManager
@@ -211,7 +213,11 @@ class AppUiTest {
         click("Salta introduzione")
         settle(1000)
         click("Prova la demo")
-        waitFor("dati della demo") { model.grades.isNotEmpty() && model.agenda.isNotEmpty() && model.notices.isNotEmpty() }
+        // I compiti del modulo Compiti arrivano da homeworks/index e compaiono nell'agenda comune.
+        waitFor("dati della demo") {
+            model.grades.isNotEmpty() && model.agenda.isNotEmpty() && model.notices.isNotEmpty() &&
+                model.agenda.any { it.isFromHomeworkModule }
+        }
         settle(1000)
     }
 
@@ -234,7 +240,9 @@ class AppUiTest {
         }
         settle(150)
         shot("demo-01c-swipe-release", wait = 0)
-        waitForText("Martedì")
+        // La Dashboard parte da domani: dopo uno scorrimento in avanti il giorno è quello dopo.
+        val dayAfterSwipe = Fmt.weekdayLong(Dates.today().plusDays(2))
+        waitForText(dayAfterSwipe)
         shot("demo-01d-swipe-done")
         list.performTouchInput {
             down(center)
@@ -243,7 +251,7 @@ class AppUiTest {
             up()
         }
         settle()
-        check(rule.onAllNodesWithText("Martedì").fetchSemanticsNodes().isNotEmpty()) { "Uno scorrimento corto non deve cambiare giorno" }
+        check(rule.onAllNodesWithText(dayAfterSwipe).fetchSemanticsNodes().isNotEmpty()) { "Uno scorrimento corto non deve cambiare giorno" }
         rule.onNode(hasText("Voti") and hasClickAction()).performClick()
         settle()
         shot("demo-02-grades")

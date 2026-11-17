@@ -105,6 +105,7 @@ class DemoTransport(private val yearOffset: Int = 0, private val latency: Boolea
                 val to = Dates.parseApiDate(at(3))
                 if (from == null || to == null) notFound() else json(obj("agenda" to JsonArray(agenda(from, to))))
             }
+            "homeworks" -> json(obj("items" to JsonArray(homeworks())))
             "lessons" -> {
                 val today = Dates.today()
                 json(obj("lessons" to JsonArray(lessons(Dates.parseApiDate(at(1)) ?: today, Dates.parseApiDate(at(2)) ?: today))))
@@ -252,6 +253,36 @@ class DemoTransport(private val yearOffset: Int = 0, private val latency: Boolea
             }
         }
         return result
+    }
+
+    /**
+     * Compiti del modulo Compiti (`homeworks/index`): uno ogni due giorni di scuola dalla settimana
+     * scorsa alle prossime due, alcuni con un file del docente; quelli passati risultano fatti.
+     */
+    private fun homeworks(): List<JsonObject> {
+        val today = referenceDate
+        val days = schoolDays(today.minusDays(7), today.plusDays(14))
+        val tasks = listOf(
+            "Esercizi assegnati con il modulo Compiti: svolgere la scheda allegata",
+            "Preparare una presentazione di 5 minuti",
+            "Completare il questionario sul libro di testo",
+            "Scrivere un riassunto di una pagina",
+        )
+        return days.filterIndexed { index, _ -> index % 2 == 0 }.map { day ->
+            val rng = SeededRandom(dayIndex(day) + 31)
+            val r = row(day)
+            val s = subjects[r[rng.next(r.size)]]
+            val id = 900_000 + dayIndex(day)
+            val files = if (rng.next(2) == 0) listOf(obj("fileId" to id, "fileName" to "scheda.pdf")) else emptyList()
+            obj(
+                "evtId" to id, "evtCode" to "NEWDC", "teacherId" to 1_234_567, "teacherName" to s.teacher,
+                "homeworkDesc" to tasks[rng.next(tasks.size)], "homeworkDone" to false,
+                "homeworkMarkedDone" to (day < today), "assignmentDate" to Dates.dayKey(day.minusDays(3)),
+                "assignmentTime" to null, "expiryDate" to Dates.dayKey(day), "expiryTime" to null,
+                "studentAttachmentsAllowed" to false, "subjectId" to s.id, "subjectDesc" to s.name,
+                "teacherFiles" to files, "teacherLinks" to emptyList<Any>(), "studentFiles" to emptyList<Any>(),
+            )
+        }
     }
 
     private fun lessons(from: LocalDate, to: LocalDate): List<JsonObject> {

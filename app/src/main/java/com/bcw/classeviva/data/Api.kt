@@ -1,6 +1,7 @@
 package com.bcw.classeviva.data
 
 import android.content.Context
+import com.bcw.classeviva.util.bool
 import com.bcw.classeviva.util.parseJson
 import com.bcw.classeviva.util.str
 import kotlinx.coroutines.CompletableDeferred
@@ -14,13 +15,18 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.File
 import java.io.IOException
 import java.net.URLDecoder
+import java.net.URLEncoder
 import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.time.LocalDateTime
@@ -62,6 +68,9 @@ object Http {
 }
 
 class HttpTransport(private val baseURL: String) : Transport {
+    /** Il server ufficiale dell'anno in corso (non un archivio): solo lì si prova anche il sito. */
+    val isOfficial: Boolean get() = baseURL == OFFICIAL
+
     companion object {
         const val OFFICIAL = "https://web.spaggiari.eu/rest/v1"
         fun archive(startYear: Int) = String.format(java.util.Locale.ROOT, "https://web%02d.spaggiari.eu/rest/v1", startYear % 100)
@@ -221,6 +230,16 @@ class ClassevivaClient(
     private val loginMutex = Mutex()
     private var pendingLogin: CompletableDeferred<LoginResponse>? = null
 
+    // Compiti del modulo Compiti: l'API dell'app, il sito con il token o il sito con la sua sessione.
+    private enum class HomeworkRoute { app, siteToken, siteSession }
+    @Volatile private var homeworkRoute: HomeworkRoute? = null
+    private val webSession by lazy { ClassevivaWebSession() }
+
+    companion object {
+        /** Percorso dei compiti del modulo Compiti (stesso dell'API del sito). */
+        const val homeworkPath = "homeworks/index"
+    }
+
     /** ID numerico dello studente: "S1234567X" → "1234567". */
     val studentId: String? get() = ident?.filter { it.isDigit() }?.ifEmpty { null }
 
@@ -347,6 +366,67 @@ class ClassevivaClient(
         return fallback ?: throw lastError
     }
 
+    // MARK: Compiti del modulo Compiti
+
+    /**
+     * I compiti del modulo Compiti (issue 16 di kubos5/BCW): si provano l'API dell'app, il sito con il
+     * token dell'app e il sito con la sua sessione, e si ricorda la prima strada che risponde. Senza
+     * rete, l'ultima copia salvata.
+     */
+    suspend fun homework(): FetchResult<List<Homework>> {
+        try {
+            val text = homeworkData()
+            val json = parseJson(text) ?: throw APIError.Decoding
+            val value = try { parseHomeworksResponse(json) } catch (e: Exception) { throw APIError.Decoding }
+            cache.store(text, homeworkPath)
+            return FetchResult(value, false)
+        } catch (e: APIError) {
+            if (e.isOffline) cached(::parseHomeworksResponse, homeworkPath)?.let { return FetchResult(it, true) }
+            throw e
+        }
+    }
+
+    /** Il server vero dell'anno in corso (non la demo, non un archivio): solo lì si prova il sito. */
+    private val usesOfficialServer: Boolean get() = (transport as? HttpTransport)?.isOfficial == true
+
+    private suspend fun homeworkData(): String {
+        ensureToken()
+        val token = token ?: throw APIError.NotAuthenticated
+        val id = studentId ?: throw APIError.NotAuthenticated
+        val path = "/students/$id/$homeworkPath"
+        val routes = homeworkRoute?.let { listOf(it) }
+            ?: if (usesOfficialServer) listOf(HomeworkRoute.app, HomeworkRoute.siteToken, HomeworkRoute.siteSession)
+            else listOf(HomeworkRoute.app)
+        var lastError: APIError = APIError.Unavailable("I compiti di Classeviva non sono disponibili.")
+        for (route in routes) {
+            try {
+                val text: String? = when (route) {
+                    HomeworkRoute.app -> {
+                        val result = transport.send("GET", path, null, token)
+                        if (result.status == 200) result.text
+                        else {
+                            lastError = APIError.Server(result.status, errorMessage(result) ?: "")
+                            null
+                        }
+                    }
+                    HomeworkRoute.siteToken -> webSession.getWithToken(path, token)
+                    HomeworkRoute.siteSession -> credentials?.let { webSession.get(path, it) }
+                }
+                if (text != null && isValidHomeworks(parseJson(text))) {
+                    if (homeworkRoute != route) homeworkRoute = route
+                    return text
+                }
+            } catch (e: APIError.Offline) {
+                throw e // senza rete le altre strade non vanno meglio
+            } catch (e: Exception) {
+                lastError = e as? APIError ?: APIError.Unavailable(e.message ?: "")
+            }
+        }
+        // La strada ricordata non risponde più: la prossima volta si riprovano tutte.
+        homeworkRoute = null
+        throw lastError
+    }
+
     /** Ultima risposta salvata, per mostrare subito i dati all'avvio. */
     suspend fun <T> cached(parse: (JsonElement) -> T, studentPath: String): T? {
         val text = cache.load(studentPath) ?: return null
@@ -365,6 +445,124 @@ class ClassevivaClient(
         token = null
         tokenExpiry = null
         credentials = null
+    }
+}
+
+/**
+ * Le API del sito di Classeviva (`web.spaggiari.eu/rest/w1`): stessi percorsi e formati di quelle
+ * dell'app (`rest/v1`), ma per il sito, che entra con il cookie di sessione (PHPSESSID) invece del
+ * token. Servono solo a ciò che l'API dell'app potrebbe non dare: i compiti del modulo Compiti.
+ *
+ * Ogni client ha la sua sessione, con i cookie solo in memoria: gli account non si mescolano e niente
+ * resta sul disco. Per entrare usa le credenziali già salvate per l'app, che vanno solo a
+ * web.spaggiari.eu, come il login dell'app.
+ */
+class ClassevivaWebSession {
+    companion object {
+        const val restBase = "https://web.spaggiari.eu/rest/w1"
+        private const val authURL = "https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php"
+        private const val userAgent = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+    }
+
+    private val cookieJar = MemoryCookieJar()
+    private val client = Http.client.newBuilder().cookieJar(cookieJar).build()
+    private val signInMutex = Mutex()
+    @Volatile private var isSignedIn = false
+
+    /** GET sul sito con il token dell'app (`Z-Auth-Token`, senza cookie): `null` se non risponde con un JSON. */
+    suspend fun getWithToken(path: String, token: String): String? = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(restBase + path).apply {
+            for ((key, value) in HttpTransport.defaultHeaders) header(key, value)
+            header("Z-Auth-Token", token)
+        }.build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: IOException) {
+            throw APIError.Offline()
+        }
+        response.use { if (it.code == 200 && it.isJson) it.body?.string() else null }
+    }
+
+    /** GET sul sito con la sua sessione: entra (o rientra, se la sessione è scaduta) con le credenziali. */
+    suspend fun get(path: String, credentials: Credentials): String = withContext(Dispatchers.IO) {
+        if (!isSignedIn) signIn(credentials)
+        repeat(2) { attempt ->
+            val request = Request.Builder().url(restBase + path)
+                .header("User-Agent", userAgent).header("Accept", "application/json").build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: IOException) {
+                throw APIError.Offline()
+            }
+            response.use { r ->
+                if (r.code == 200 && r.isJson) return@withContext r.body?.string().orEmpty()
+                // Sessione scaduta: il sito risponde 401/403 o rimanda alla pagina di accesso (HTML).
+                val expired = r.code == 401 || r.code == 403 || !r.isJson
+                if (!expired || attempt == 1) throw APIError.Server(r.code, "")
+                isSignedIn = false
+                signIn(credentials)
+            }
+        }
+        throw APIError.NotAuthenticated
+    }
+
+    // MARK: Accesso
+
+    private suspend fun signIn(credentials: Credentials) = signInMutex.withLock {
+        if (isSignedIn) return@withLock
+        var auth = authenticate(
+            "aLoginPwd",
+            listOf("cid" to "", "uid" to credentials.username, "pwd" to credentials.password, "pin" to "", "target" to ""),
+        )
+        // Più profili con le stesse credenziali (genitore con più figli): si sceglie quello dell'app.
+        if (!auth.bool("loggedIn") && auth.bool("verified") && credentials.ident != null) {
+            auth = authenticate("aLoginSam", listOf("uid" to credentials.ident))
+        }
+        if (!auth.bool("loggedIn")) throw APIError.Unavailable("Il sito di Classeviva non ha accettato l'accesso.")
+        isSignedIn = true
+    }
+
+    /** Una richiesta ad `AuthApi4.php` (modulo, come il sito): restituisce `data.auth`. */
+    private fun authenticate(action: String, fields: List<Pair<String, String>>): JsonObject {
+        val form = fields.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
+            .toRequestBody("application/x-www-form-urlencoded; charset=UTF-8".toMediaType())
+        val request = Request.Builder().url("$authURL?a=$action")
+            .header("User-Agent", userAgent).header("Accept", "application/json").post(form).build()
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: IOException) {
+            throw APIError.Offline()
+        }
+        response.use { r ->
+            val json = parseJson(r.body?.string().orEmpty()) as? JsonObject
+            val auth = ((json?.get("data") as? JsonObject)?.get("auth")) as? JsonObject
+            if (r.code !in 200..299 || auth == null) throw APIError.Unavailable("Risposta inattesa dal sito di Classeviva.")
+            return auth
+        }
+    }
+
+    /** Corpo `application/x-www-form-urlencoded`: tutto codificato tranne i caratteri non riservati. */
+    private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+    private val Response.isJson: Boolean get() = header("Content-Type")?.contains("json") == true
+}
+
+/** Cookie solo in memoria, uno per sessione: gli account non si mescolano e niente resta sul disco. */
+private class MemoryCookieJar : CookieJar {
+    private val cookies = mutableListOf<Cookie>()
+
+    @Synchronized
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        this.cookies.removeAll { old -> cookies.any { it.name == old.name && it.domain == old.domain && it.path == old.path } }
+        this.cookies += cookies
+    }
+
+    @Synchronized
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val now = System.currentTimeMillis()
+        cookies.removeAll { it.expiresAt < now }
+        return cookies.filter { it.matches(url) }
     }
 }
 
