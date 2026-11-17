@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -997,6 +998,25 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
     }
 
     val unreadNoticesCount: Int get() = notices.count { !it.isRead }
+
+    /**
+     * "Leggi tutto" della Bacheca: segna come lette tutte le comunicazioni da leggere, aprendole su
+     * Classeviva come la lettura normale (che è l'unico modo per segnarle), quattro alla volta.
+     * Adesioni e firme non vengono toccate. Restituisce quante non è riuscita a segnare.
+     */
+    suspend fun markAllNoticesRead(): Int {
+        var pending = notices.filter { !it.isRead }
+        var failed = 0
+        while (pending.isNotEmpty()) {
+            val batch = pending.take(4)
+            pending = pending.drop(4)
+            val results = coroutineScope {
+                batch.map { notice -> async { runCatching { openNotice(notice) }.isSuccess } }
+            }.map { it.await() }
+            failed += results.count { !it }
+        }
+        return failed
+    }
 
     // MARK: Note
 

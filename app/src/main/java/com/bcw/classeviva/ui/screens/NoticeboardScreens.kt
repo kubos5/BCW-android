@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,12 +73,37 @@ fun LocalSearchField(value: String, placeholder: String, onChange: (String) -> U
 fun NoticeboardScreen() {
     val model = LocalModel.current
     val nav = LocalNavigator.current
+    val ui = LocalUi.current
+    val scope = rememberCoroutineScope()
     var search by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
     var onlyUnread by rememberSaveable { mutableStateOf(false) }
+    var readingAll by remember { mutableStateOf(false) }
     val categories = model.notices.map { it.category }.distinct().sortedWith { a, b -> com.bcw.classeviva.util.byName(a, b) }
     val items = model.notices.filter { (category == null || it.category == category) && (!onlyUnread || !it.isRead) && it.title.containsText(search) }
-    PageScaffold(title = "Bacheca", onRefresh = { model.loadNotices() }) {
+    PageScaffold(
+        title = "Bacheca",
+        onRefresh = { model.loadNotices() },
+        actions = {
+            IconButton(
+                onClick = {
+                    val unread = model.unreadNoticesCount
+                    val message = if (unread == 1) "La comunicazione da leggere verrà segnata come letta, anche su Classeviva. Le adesioni e le firme richieste restano da fare."
+                    else "Le $unread comunicazioni da leggere verranno segnate come lette, anche su Classeviva. Le adesioni e le firme richieste restano da fare."
+                    ui.ask("Segnare tutto come letto?", message, "Leggi tutto") {
+                        scope.launch {
+                            readingAll = true
+                            val failed = model.markAllNoticesRead()
+                            readingAll = false
+                            ui.toast(if (failed == 0) if (unread == 1) "Comunicazione segnata come letta." else "$unread comunicazioni segnate come lette."
+                                     else if (failed == 1) "Una comunicazione non è stata segnata: riprova più tardi." else "$failed comunicazioni non sono state segnate: riprova più tardi.")
+                        }
+                    }
+                },
+                enabled = model.unreadNoticesCount > 0 && !readingAll,
+            ) { Icon("doneAll", contentDescription = "Leggi tutto", tint = Theme.scheme.primary) }
+        },
+    ) {
         block("search") { LocalSearchField(search, "Cerca nelle comunicazioni") { search = it } }
         block("chips") {
             ChipRow {
