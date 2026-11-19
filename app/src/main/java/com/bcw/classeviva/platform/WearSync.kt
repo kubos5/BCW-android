@@ -3,6 +3,13 @@ package com.bcw.classeviva.platform
 import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.material3.ColorScheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.bcw.classeviva.data.DEFAULT_ACCENT
+import com.bcw.classeviva.ui.theme.ColorStyle
+import com.bcw.classeviva.ui.theme.ContrastLevel
+import com.bcw.classeviva.ui.theme.normalizeHex
 import androidx.compose.ui.graphics.toArgb
 import com.bcw.classeviva.data.Preferences
 import com.bcw.classeviva.data.timetable.EntryTint
@@ -58,16 +65,39 @@ object WearSync {
         }
     }
 
+    /** Ultimo invio all'orologio (millisecondi), per Impostazioni › Smartwatch. */
+    var lastSent: Long? by mutableStateOf(null)
+        private set
+
     fun pushNow(context: Context, store: TimetableStore, preferences: Preferences) {
         runCatching {
             if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) != ConnectionResult.SUCCESS) return
+            val now = System.currentTimeMillis()
             val request = PutDataMapRequest.create(TIMETABLE_PATH).apply {
                 dataMap.putString("json", payload(context, store, preferences))
-                dataMap.putLong("updatedAt", System.currentTimeMillis())
+                dataMap.putLong("updatedAt", now)
             }.asPutDataRequest().setUrgent()
             // Senza un orologio collegato la richiesta resta in coda e parte alla connessione.
-            Wearable.getDataClient(context).putDataItem(request)
+            Wearable.getDataClient(context).putDataItem(request).addOnSuccessListener { lastSent = now }
         }
+    }
+
+    /** L'aspetto che va sull'orologio: quello di BCW o, con la sincronizzazione spenta, il suo. */
+    private data class WatchLook(val appearance: String, val accent: String, val colorStyle: String, val contrast: String, val settings: ThemeSettings)
+
+    private fun look(preferences: Preferences): WatchLook {
+        if (preferences.watchSyncAppearance) {
+            return WatchLook(
+                preferences.string("appearance"), preferences.string("accentColor"),
+                preferences.string("colorStyle"), preferences.string("contrast"), ThemeSettings.from(preferences),
+            )
+        }
+        val appearance = preferences.string("watchAppearance")
+        val accent = normalizeHex(preferences.string("watchAccentColor")) ?: DEFAULT_ACCENT
+        val style = runCatching { ColorStyle.valueOf(preferences.string("watchColorStyle")) }.getOrDefault(ColorStyle.tonalSpot)
+        val contrast = runCatching { ContrastLevel.valueOf(preferences.string("watchContrast")) }.getOrDefault(ContrastLevel.standard)
+        val mode = runCatching { AppearanceMode.valueOf(appearance) }.getOrDefault(AppearanceMode.system)
+        return WatchLook(appearance, accent, style.name, contrast.name, ThemeSettings(appearance = mode, accent = accent, style = style, contrast = contrast))
     }
 
     fun payload(context: Context, store: TimetableStore, preferences: Preferences): String {
@@ -84,31 +114,31 @@ object WearSync {
                 put("tint", tintJson(store.tint(entry)))
             }
         }
+        val look = look(preferences)
         return buildJsonObject {
             put("version", 3)
             store.owner?.let { put("owner", it) }
-            put("accent", preferences.string("accentColor"))
-            put("colorStyle", preferences.string("colorStyle"))
-            put("contrast", preferences.string("contrast"))
-            put("appearance", preferences.string("appearance"))
+            put("accent", look.accent)
+            put("colorStyle", look.colorStyle)
+            put("contrast", look.contrast)
+            put("appearance", look.appearance)
             put("updatedAt", System.currentTimeMillis())
             put("palette", paletteJson())
-            put("dark", isDark(context, preferences))
-            put("scheme", schemeJson(context, preferences))
+            put("dark", isDark(context, look.settings.appearance))
+            put("scheme", schemeJson(context, look.settings))
             put("entries", JsonArray(entries))
         }.toString()
     }
 
     /** Il tema che il telefono usa adesso: quello scelto o, con "Automatico", quello del sistema. */
-    fun isDark(context: Context, preferences: Preferences): Boolean = when (preferences.appearance) {
+    fun isDark(context: Context, appearance: AppearanceMode): Boolean = when (appearance) {
         AppearanceMode.light -> false
         AppearanceMode.dark -> true
         AppearanceMode.system -> (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
 
     /** I ruoli di Material 3 del telefono, chiaro e scuro (accento, stile, contrasto o colori del sistema). */
-    private fun schemeJson(context: Context, preferences: Preferences): JsonObject {
-        val settings = ThemeSettings.from(preferences)
+    private fun schemeJson(context: Context, settings: ThemeSettings): JsonObject {
         return buildJsonObject {
             put("light", rolesJson(bcwColors(context, settings, dark = false).scheme))
             put("dark", rolesJson(bcwColors(context, settings, dark = true).scheme))

@@ -75,6 +75,13 @@ class Preferences(private val store: SharedPreferences) {
             "liveUpdates" to JsonPrimitive(true),
             // Come su iOS: avviso di una versione nuova su GitHub (Impostazioni › Generale). Non si sincronizza.
             "updateAlerts" to JsonPrimitive(true),
+            // Solo su Android, solo su questo dispositivo: Impostazioni › Smartwatch. Spenta la
+            // sincronizzazione, l'orologio usa l'aspetto scelto qui invece di quello di BCW.
+            "watchSyncAppearance" to JsonPrimitive(true),
+            "watchAppearance" to JsonPrimitive("system"),
+            "watchAccentColor" to JsonPrimitive("#a23e2f"),
+            "watchColorStyle" to JsonPrimitive("tonalSpot"),
+            "watchContrast" to JsonPrimitive("standard"),
             // Come su iOS (`showsPlusBanner`): banner in cima alle Impostazioni. Non si sincronizza.
             "showsPlusBanner" to JsonPrimitive(true),
             // Solo su questo dispositivo, come su iOS: compiti del modulo Compiti già presi da Classeviva.
@@ -156,6 +163,7 @@ class Preferences(private val store: SharedPreferences) {
     val dynamicColor: Boolean get() = bool("dynamicColor")
     val liveUpdates: Boolean get() = bool("liveUpdates")
     val updateAlerts: Boolean get() = bool("updateAlerts")
+    val watchSyncAppearance: Boolean get() = bool("watchSyncAppearance")
     val showsPlusBanner: Boolean get() = bool("showsPlusBanner")
 
     /** La voce si sincronizza con l'account BCW (scelta solo per questo dispositivo). */
