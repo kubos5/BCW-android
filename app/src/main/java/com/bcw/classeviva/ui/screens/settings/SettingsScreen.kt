@@ -7,6 +7,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -117,7 +119,18 @@ private fun paneTint(p: SettingsPane) = when (p) {
 @Composable
 fun SettingsScreen() {
     val nav = LocalNavigator.current
+    val showsBanner = LocalModel.current.preferences.showsPlusBanner
+    val reduced = Theme.reducedMotion
     PageScaffold(title = "Impostazioni") {
+        if (showsBanner) item(key = "plusBanner") {
+            Box(
+                Modifier.fillMaxWidth().animateItem(
+                    fadeInSpec = tween(if (reduced) 150 else 210),
+                    placementSpec = if (reduced) null else spring(dampingRatio = 0.9f, stiffness = 600f),
+                    fadeOutSpec = tween(if (reduced) 100 else 150),
+                ),
+            ) { PlusBanner() }
+        }
         val groups = listOf(
             listOf(SettingsPane.general, SettingsPane.appearance),
             listOf(SettingsPane.grades, SettingsPane.dashboard, SettingsPane.timetable, SettingsPane.notifications),
@@ -194,7 +207,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
             else "BCW (Better ClasseViVa) è un'app non ufficiale, non affiliata a Gruppo Spaggiari Parma S.p.A. Le credenziali restano cifrate su questo dispositivo e vanno solo ai server di Classeviva.",
         ) {
             item { ValueRow("Versione", VERSION, monospaced = true) }
-            item { ValueRow("Ported by", "Mikqs") }
             item {
                 val scope = rememberCoroutineScope()
                 ListRow("Note di rilascio", subtitle = "Le novità dell'ultima versione di BCW", leading = { FormIcon("info") }, onClick = {
@@ -207,6 +219,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
                 }, trailing = { Icon("chevronRight", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) })
             }
             item { ListRow("Apri Classeviva sul web", leading = { FormIcon("compass") }, onClick = { ui.openUrl("https://web.spaggiari.eu") }, trailing = { Icon("externalLink", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) }) }
+        }
+    }
+    block("banner") {
+        val prefs = LocalModel.current.preferences
+        ListGroup(footer = "Su Android tutte le funzioni di BCW, comprese quelle di BCW+, sono sempre sbloccate.") {
+            item { ToggleRow("Mostra il banner nelle Impostazioni", prefs.showsPlusBanner, { prefs.set("showsPlusBanner", it) }, icon = "android") }
         }
     }
     block("onboarding") {

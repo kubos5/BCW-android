@@ -199,12 +199,39 @@ class AppUiTest {
         click("Generale")
         waitForText("Sicurezza")
         settle()
-        rule.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(4)
+        rule.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(5)
         settle()
         shot("settings-github")
         for (title in listOf("BCW", "BCW-web", "BCW-android", "BCW-api", "kubos5")) {
             check(rule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()) { "Manca «$title» in Su GitHub" }
         }
+    }
+
+    /** Impostazioni: banner di BCW per Android (come "Build GitHub" di iOS 4.0), si nasconde e si rimostra da Generale. */
+    @Test
+    fun settingsPlusBanner() {
+        startDemo()
+        rule.onNode(hasText("Tu") and hasClickAction()).performClick()
+        settle()
+        clickDescription("Impostazioni")
+        settle()
+        waitForText("Le funzioni BCW+ sono automaticamente sbloccate su Android")
+        shot("settings-plus-banner")
+        clickDescription("Nascondi il banner")
+        settle()
+        check(rule.onAllNodesWithText("Le funzioni BCW+ sono automaticamente sbloccate su Android").fetchSemanticsNodes().isEmpty()) { "Il banner non si nasconde" }
+        check(!model.preferences.showsPlusBanner)
+        shot("settings-plus-banner-hidden")
+        click("Generale")
+        waitForText("Sicurezza")
+        settle()
+        check(rule.onAllNodesWithText("Ported by").fetchSemanticsNodes().isEmpty()) { "C'è ancora «Ported by»" }
+        rule.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(4)
+        settle()
+        shot("settings-plus-toggle")
+        click("Mostra il banner nelle Impostazioni")
+        settle()
+        check(model.preferences.showsPlusBanner) { "L'interruttore non rimostra il banner" }
     }
 
     /** Salta l'introduzione e apre la demo. */
