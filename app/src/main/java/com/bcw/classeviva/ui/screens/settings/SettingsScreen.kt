@@ -96,6 +96,7 @@ const val VERSION = BuildConfig.VERSION_NAME
 
 enum class SettingsPane(val title: String, val icon: String) {
     general("Generale", "gear"),
+    smartwatch("Smartwatch", "watch"),
     appearance("Aspetto", "palette"),
     grades("Voti", "graduationCap"),
     dashboard("Dashboard", "dashboard"),
@@ -107,6 +108,7 @@ enum class SettingsPane(val title: String, val icon: String) {
 @Composable
 private fun paneTint(p: SettingsPane) = when (p) {
     SettingsPane.general -> Theme.scheme.onSurfaceVariant
+    SettingsPane.smartwatch -> Theme.colors.good.color
     SettingsPane.appearance -> Theme.scheme.tertiary
     SettingsPane.grades -> Theme.colors.subject(1).color
     SettingsPane.dashboard -> Theme.scheme.primary
@@ -132,7 +134,7 @@ fun SettingsScreen() {
             ) { PlusBanner() }
         }
         val groups = listOf(
-            listOf(SettingsPane.general, SettingsPane.appearance),
+            listOf(SettingsPane.general, SettingsPane.smartwatch, SettingsPane.appearance),
             listOf(SettingsPane.grades, SettingsPane.dashboard, SettingsPane.timetable, SettingsPane.notifications),
             listOf(SettingsPane.accounts),
         )
@@ -152,6 +154,7 @@ fun SettingsPaneScreen(name: String) {
     PageScaffold(title = pane.title, gap = 24.dp) {
         when (pane) {
             SettingsPane.general -> generalPane()
+            SettingsPane.smartwatch -> block("smartwatch") { SmartwatchPane() }
             SettingsPane.appearance -> block("appearance") { AppearancePane() }
             SettingsPane.grades -> block("grades") { GradesPane() }
             SettingsPane.dashboard -> block("dashboard") { DashboardPane() }

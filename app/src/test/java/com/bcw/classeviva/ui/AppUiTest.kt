@@ -234,6 +234,29 @@ class AppUiTest {
         check(model.preferences.showsPlusBanner) { "L'interruttore non rimostra il banner" }
     }
 
+    /** Impostazioni › Smartwatch: orologio, sincronizzazione e aspetto proprio quando è spenta. */
+    @Test
+    fun settingsSmartwatch() {
+        startDemo()
+        rule.onNode(hasText("Tu") and hasClickAction()).performClick()
+        settle()
+        clickDescription("Impostazioni")
+        settle()
+        click("Smartwatch")
+        waitForText("Sincronizza le impostazioni")
+        settle(2000)
+        shot("settings-smartwatch")
+        check(rule.onAllNodesWithText("Aspetto sull'orologio").fetchSemanticsNodes().isEmpty()) { "Aspetto dell'orologio visibile con la sincronizzazione accesa" }
+        click("Sincronizza le impostazioni")
+        settle()
+        check(!model.preferences.watchSyncAppearance)
+        waitForText("Aspetto sull'orologio")
+        rule.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(0)
+        settle()
+        shot("settings-smartwatch-aspetto")
+        model.preferences.set("watchSyncAppearance", true)
+    }
+
     /** Salta l'introduzione e apre la demo. */
     private fun startDemo() {
         settle(3000)
