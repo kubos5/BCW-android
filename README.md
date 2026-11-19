@@ -25,7 +25,7 @@
 
 ## Installazione
 
-1. scarica l'ultima versione dalle [release](https://github.com/kubos5/BCW/releases/latest)
+1. scarica l'ultima versione dalle [release](https://github.com/kubos5/BCW-android/releases/latest)
 2. installa l'APK su un dispositivo Android
 3. fatto!
 
