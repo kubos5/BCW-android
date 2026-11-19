@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Voce di una lista segmentata nei widget (bianca, colorata con la tinta del tema): angoli ampi solo all'esterno del gruppo, come ListGroup dell'app. I 2 dp in cima sono lo spazio dalla voce sopra: dentro il disegno, così ogni voce è un figlio solo (Glance tiene al massimo 10 figli per colonna). -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetTop="2dp">
+    <shape android:shape="rectangle">
+        <solid android:color="#FFFFFFFF" />
+        <corners android:topLeftRadius="4dp" android:topRightRadius="4dp" android:bottomLeftRadius="16dp" android:bottomRightRadius="16dp" />
+    </shape>
+</inset>
