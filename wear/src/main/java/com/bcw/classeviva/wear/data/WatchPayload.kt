@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 
@@ -19,6 +20,19 @@ data class PaletteMode(val subjects: List<Triple<Int, Int, Int>>, val breakTint:
 
 /** La palette delle materie inviata dal telefono, per il tema chiaro e per lo scuro. */
 data class WatchPalette(val light: PaletteMode, val dark: PaletteMode)
+
+/** I ruoli di Material 3 del tema del telefono (nome come "primary" → RGB), chiaro e scuro. */
+data class WatchScheme(val light: Map<String, Int>, val dark: Map<String, Int>)
+
+/** I ruoli che l'orologio usa: senza uno di questi lo schema del telefono non vale. */
+val REQUIRED_ROLES = listOf(
+    "primary", "on-primary", "primary-container", "on-primary-container",
+    "secondary", "on-secondary", "secondary-container", "on-secondary-container",
+    "tertiary", "on-tertiary", "tertiary-container", "on-tertiary-container",
+    "error", "on-error", "error-container", "on-error-container",
+    "surface", "surface-container-low", "surface-container", "surface-container-high",
+    "on-surface", "on-surface-variant", "outline", "outline-variant",
+)
 
 data class WatchLesson(
     val id: String,
@@ -49,6 +63,10 @@ data class WatchPayload(
     val updatedAt: Long = 0L,
     /** Palette del telefono; assente nei dati di esempio, dove si usano i colori integrati. */
     val palette: WatchPalette? = null,
+    /** I colori del tema del telefono (versione 3); senza, l'orologio li genera dall'accento. */
+    val scheme: WatchScheme? = null,
+    /** Il tema in uso sul telefono (versione 3): con "Automatico" l'orologio lo segue. */
+    val dark: Boolean? = null,
     /** Dati di esempio: nessuna sincronizzazione ancora ricevuta. */
     val demo: Boolean = false,
 ) {
@@ -71,6 +89,8 @@ fun parsePayload(text: String): WatchPayload? = runCatching {
         owner = root.string("owner"),
         updatedAt = (root["updatedAt"] as? JsonPrimitive)?.longOrNull ?: 0L,
         palette = parsePalette(root["palette"] as? JsonObject),
+        scheme = parseScheme(root["scheme"] as? JsonObject),
+        dark = (root["dark"] as? JsonPrimitive)?.booleanOrNull,
     )
 }.getOrNull()
 
@@ -79,6 +99,18 @@ private fun parsePalette(o: JsonObject?): WatchPalette? {
     val light = parseMode(o["light"] as? JsonObject) ?: return null
     val dark = parseMode(o["dark"] as? JsonObject) ?: return null
     return WatchPalette(light, dark)
+}
+
+private fun parseScheme(o: JsonObject?): WatchScheme? {
+    o ?: return null
+    fun roles(m: JsonObject?): Map<String, Int>? {
+        m ?: return null
+        val out = m.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.intOrNull?.let { k to (it and 0xFFFFFF) } }.toMap()
+        return out.takeIf { REQUIRED_ROLES.all(it::containsKey) }
+    }
+    val light = roles(o["light"] as? JsonObject) ?: return null
+    val dark = roles(o["dark"] as? JsonObject) ?: return null
+    return WatchScheme(light, dark)
 }
 
 private fun parseMode(o: JsonObject?): PaletteMode? {

@@ -19,13 +19,7 @@ class MainActivity : ComponentActivity() {
         WatchData.load(this)
         setContent {
             val payload = WatchData.payload ?: demoPayload()
-            WearAppTheme(
-                accent = payload.accent,
-                colorStyle = payload.colorStyle,
-                contrast = payload.contrast,
-                appearance = payload.appearance,
-                palette = payload.palette,
-            ) {
+            WearAppTheme(payload) {
                 WearApp(payload)
             }
         }

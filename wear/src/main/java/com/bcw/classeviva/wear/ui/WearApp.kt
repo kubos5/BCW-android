@@ -29,6 +29,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.wear.compose.foundation.CurvedTextStyle
+import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -94,13 +101,20 @@ fun WearApp(payload: WatchPayload) {
         AppScaffold(
             containerColor = Color.Transparent,
             timeText = {
+                // L'ora di Wear è sempre chiara su una pillola scura: qui prende i colori dello
+                // schermo, così si legge nel tema chiaro e nello scuro (e "DOMANI" non sparisce).
                 if (showTimetable) {
-                    TimeText()
+                    TimeText(backgroundColor = colors.surface) { time ->
+                        timeTextCurvedText(time, CurvedTextStyle(color = colors.onSurface))
+                    }
                 } else {
-                    TimeText { time ->
-                        timeTextCurvedText(time)
-                        timeTextSeparator()
-                        curvedText(shortLabel(schedule), color = onHero.copy(alpha = 0.8f))
+                    TimeText(backgroundColor = Color.Transparent) { time ->
+                        timeTextCurvedText(time, CurvedTextStyle(color = onHero))
+                        val label = shortLabel(schedule)
+                        if (label.isNotEmpty()) {
+                            timeTextSeparator(CurvedTextStyle(color = onHero.copy(alpha = 0.7f)))
+                            curvedText(label, style = CurvedTextStyle(color = onHero.copy(alpha = 0.85f)))
+                        }
                     }
                 }
             },
@@ -138,12 +152,13 @@ private fun NowScreen(payload: WatchPayload, schedule: ScheduleNow, colors: Wear
                 ),
             )
         }
-        // Inset reali per lo schermo XL round (240dp): il tempo curvo occupa in alto ~30dp,
-        // il pulsante di bordo riserva ~56dp al fondo. Il resto è tutto spazio per la hero.
+        // Margini in proporzione allo schermo rotondo (203 dp sul Galaxy Watch7, 240 sui più grandi):
+        // in alto l'ora curva, in basso il pulsante di bordo, ai lati la curva dello schermo.
+        val size = LocalConfiguration.current.screenWidthDp.dp
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(top = 30.dp, bottom = 60.dp),
+                .padding(start = size * 0.12f, end = size * 0.12f, top = size * 0.16f, bottom = 52.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -153,8 +168,10 @@ private fun NowScreen(payload: WatchPayload, schedule: ScheduleNow, colors: Wear
         EdgeButton(
             onClick = onOpenTimetable,
             modifier = Modifier.align(Alignment.BottomCenter),
+            buttonSize = EdgeButtonSize.ExtraSmall,
+            colors = ButtonDefaults.buttonColors(containerColor = on, contentColor = shown?.tint?.container(colors) ?: colors.surfaceContainerHigh),
         ) {
-            Text("Tutto l'orario")
+            Text("Orario", style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -179,7 +196,7 @@ private fun HeroContent(payload: WatchPayload, schedule: ScheduleNow, colors: We
             Spacer(Modifier.height(8.dp))
             Text(
                 "Nessuna lezione",
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = on,
                 textAlign = TextAlign.Center,
@@ -195,15 +212,15 @@ private fun HeroContent(payload: WatchPayload, schedule: ScheduleNow, colors: We
             )
             return@Column
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
+        Spacer(Modifier.height(4.dp))
+        // Il nome della materia rimpicciolisce finché non entra in due righe (da 22 a 15 sp):
+        // "Fisica" resta grande, "Lingua e cultura straniera (inglese)" non esce dallo schermo.
+        BasicText(
             shown.title.ifEmpty { "Senza titolo" },
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
-            color = on,
-            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleLarge.copy(color = on, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = 22.sp, stepSize = 1.sp),
             modifier = Modifier.fillMaxWidth(),
         )
         val detail = listOf(shown.room, shown.teacher).filter { it.isNotBlank() }.joinToString(" · ")
@@ -211,7 +228,7 @@ private fun HeroContent(payload: WatchPayload, schedule: ScheduleNow, colors: We
             Spacer(Modifier.height(2.dp))
             Text(
                 detail,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = on.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -219,35 +236,35 @@ private fun HeroContent(payload: WatchPayload, schedule: ScheduleNow, colors: We
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             "${timeString(shown.start)} – ${timeString(shown.end)}",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = on,
         )
         if (schedule.current != null) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 "Mancano ${durationString(shown.end - schedule.minute)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
                 color = on,
             )
             val next = schedule.next
             if (next != null) {
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(6.dp))
                 NextRow(next, on)
             }
         } else {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 if (schedule.nextDay == schedule.today) {
                     "Inizia tra ${durationString(shown.start - schedule.minute)}"
                 } else {
                     "Inizia ${dayLabel(schedule.nextDay ?: schedule.today, schedule.today).lowercase(Locale.ITALIAN)} alle ${timeString(shown.start)}"
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = on.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -262,21 +279,22 @@ private fun NextRow(next: WatchLesson, on: Color) {
         Modifier
             .clip(RoundedCornerShape(50))
             .background(on.copy(alpha = 0.14f))
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("POI", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = on.copy(alpha = 0.7f))
-        Spacer(Modifier.width(7.dp))
+        Text("POI", style = MaterialTheme.typography.bodyExtraSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = on.copy(alpha = 0.7f))
+        Spacer(Modifier.width(6.dp))
         Text(
             next.title.ifEmpty { "Senza titolo" },
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.weight(1f, fill = false),
             fontWeight = FontWeight.SemiBold,
             color = on,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.width(7.dp))
-        Text(timeString(next.start), style = MaterialTheme.typography.labelMedium, color = on.copy(alpha = 0.8f))
+        Spacer(Modifier.width(6.dp))
+        Text(timeString(next.start), style = MaterialTheme.typography.labelSmall, color = on.copy(alpha = 0.8f))
     }
 }
 
@@ -293,22 +311,13 @@ private fun TimetableScreen(payload: WatchPayload, colors: WearColors, now: Loca
             modifier = Modifier.fillMaxSize(),
         ) {
             item(key = "heading") {
-                Text(
-                    "Tutto l'orario",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 2.dp),
-                )
+                ListHeader { Text("Tutto l'orario", color = colors.onSurface) }
             }
             if (payload.isEmpty) {
                 item(key = "empty") {
                     Text(
                         "Crea l'orario in BCW sul telefono: arriverà qui da solo.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurface,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
@@ -332,12 +341,12 @@ private fun TimetableScreen(payload: WatchPayload, colors: WearColors, now: Loca
                 item(key = "footer") {
                     Text(
                         if (payload.demo) "Demo · apri BCW sul telefono per sincronizzare" else "Sincronizzato dal telefono",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.bodyExtraSmall,
                         color = colors.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -350,13 +359,13 @@ private fun DayHeader(date: LocalDate, today: LocalDate, colors: WearColors) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 10.dp, bottom = 4.dp),
+            .padding(horizontal = 14.dp)
+            .padding(top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             dayLabel(date, today),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = colors.onSurface,
         )
@@ -372,28 +381,27 @@ private fun LessonRow(lesson: WatchLesson, isNow: Boolean, colors: WearColors) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (isNow) lesson.tint.container(colors) else colors.surfaceContainerHigh)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isNow) lesson.tint.container(colors) else colors.surfaceContainer)
+            .padding(start = 12.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(46.dp)) {
-            Text(timeString(lesson.start), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = on)
-            Text(timeString(lesson.end), style = MaterialTheme.typography.labelSmall, color = secondary)
+        Column(Modifier.width(38.dp)) {
+            Text(timeString(lesson.start), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = on)
+            Text(timeString(lesson.end), style = MaterialTheme.typography.bodySmall, color = secondary)
         }
         Box(
             Modifier
-                .width(5.dp)
-                .height(28.dp)
+                .width(4.dp)
+                .height(26.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .background(lesson.tint.accent(colors)),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 lesson.title.ifEmpty { if (lesson.isBreak) "Intervallo" else "Senza titolo" },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
                 color = on,
                 maxLines = 1,
@@ -401,14 +409,14 @@ private fun LessonRow(lesson: WatchLesson, isNow: Boolean, colors: WearColors) {
             )
             val detail = listOf(lesson.room, lesson.teacher).filter { it.isNotBlank() }.joinToString(" · ")
             if (detail.isNotEmpty()) {
-                Text(detail, style = MaterialTheme.typography.labelSmall, color = secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(detail, style = MaterialTheme.typography.bodyExtraSmall, color = secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (isNow) {
             Spacer(Modifier.width(6.dp))
             Text(
                 "ORA",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodyExtraSmall,
                 fontWeight = FontWeight.Bold,
                 color = on,
                 modifier = Modifier

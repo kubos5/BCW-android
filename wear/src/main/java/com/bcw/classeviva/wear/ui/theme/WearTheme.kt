@@ -7,9 +7,12 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
 import com.bcw.classeviva.wear.data.Tint
 import com.bcw.classeviva.wear.data.WatchPalette
+import com.bcw.classeviva.wear.data.WatchPayload
+import com.bcw.classeviva.wear.data.WatchScheme
 import com.materialkolor.hct.Hct
 import kotlin.math.max
 
@@ -17,18 +20,43 @@ import kotlin.math.max
 @Immutable
 data class SubjectColors(val color: Color, val container: Color, val onContainer: Color)
 
-/** I colori di un tema Wear: ruoli di Material 3 presi da `ColorEngine`, come sul telefono. */
+/**
+ * I colori di un tema Wear: i ruoli di Material 3 del telefono (dal payload, compresi colori del
+ * sistema e contrasto) o, senza, quelli generati da `ColorEngine` con lo stesso accento.
+ */
 @Immutable
 class WearColors(
-    val surface: Color,
-    val surfaceContainerHigh: Color,
-    val onSurface: Color,
-    val onSurfaceVariant: Color,
+    private val roles: Map<String, Int>,
     val isDark: Boolean,
     val subjects: List<SubjectColors>,
     val breakTint: Color,
 ) {
+    fun role(name: String): Color = Color(0xFF000000.toInt() or (roles[name] ?: 0x808080))
+    val surface get() = role("surface")
+    val surfaceContainer get() = role("surface-container")
+    val surfaceContainerHigh get() = role("surface-container-high")
+    val onSurface get() = role("on-surface")
+    val onSurfaceVariant get() = role("on-surface-variant")
+    val primary get() = role("primary")
+    val onPrimary get() = role("on-primary")
     fun subject(index: Int) = subjects[((index % 12) + 12) % 12]
+
+    /** Lo schema di Wear Material 3 con i colori del telefono: pulsanti, ora e indicatori li seguono. */
+    fun wearScheme(): ColorScheme = ColorScheme(
+        primary = role("primary"), primaryDim = role("primary"), primaryContainer = role("primary-container"),
+        onPrimary = role("on-primary"), onPrimaryContainer = role("on-primary-container"),
+        secondary = role("secondary"), secondaryDim = role("secondary"), secondaryContainer = role("secondary-container"),
+        onSecondary = role("on-secondary"), onSecondaryContainer = role("on-secondary-container"),
+        tertiary = role("tertiary"), tertiaryDim = role("tertiary"), tertiaryContainer = role("tertiary-container"),
+        onTertiary = role("on-tertiary"), onTertiaryContainer = role("on-tertiary-container"),
+        surfaceContainerLow = role("surface-container-low"), surfaceContainer = role("surface-container"),
+        surfaceContainerHigh = role("surface-container-high"),
+        onSurface = role("on-surface"), onSurfaceVariant = role("on-surface-variant"),
+        outline = role("outline"), outlineVariant = role("outline-variant"),
+        background = role("surface"), onBackground = role("on-surface"),
+        error = role("error"), errorDim = role("error"), errorContainer = role("error-container"),
+        onError = role("on-error"), onErrorContainer = role("on-error-container"),
+    )
 }
 
 val LocalWearColors = staticCompositionLocalOf<WearColors> { error("WearColors non impostato") }
@@ -51,17 +79,23 @@ private val darkSubjects = listOf(
 
 private val themeCache = HashMap<Triple<String, ColorStyle, ContrastLevel>, ColorEngine.Theme>()
 
-fun wearColors(accent: String, style: ColorStyle, contrast: ContrastLevel, dark: Boolean, palette: WatchPalette? = null): WearColors {
-    val generated = synchronized(themeCache) {
-        themeCache.getOrPut(Triple(accent, style, contrast)) { ColorEngine.build(accent, style, contrast) }
+fun wearColors(
+    accent: String,
+    style: ColorStyle,
+    contrast: ContrastLevel,
+    dark: Boolean,
+    palette: WatchPalette? = null,
+    scheme: WatchScheme? = null,
+): WearColors {
+    val roles = (if (dark) scheme?.dark else scheme?.light) ?: run {
+        val generated = synchronized(themeCache) {
+            themeCache.getOrPut(Triple(accent, style, contrast)) { ColorEngine.build(accent, style, contrast) }
+        }
+        (if (dark) generated.dark else generated.light).roles.mapValues { it.value and 0xFFFFFF }
     }
-    val r = if (dark) generated.dark else generated.light
     val mode = if (dark) palette?.dark else palette?.light
     return WearColors(
-        surface = Color(r["surface"]),
-        surfaceContainerHigh = Color(r["surface-container-high"]),
-        onSurface = Color(r["on-surface"]),
-        onSurfaceVariant = Color(r["on-surface-variant"]),
+        roles = roles,
         isDark = dark,
         subjects = mode?.subjects?.map { (color, container, onContainer) ->
             SubjectColors(c(color.toLong()), c(container.toLong()), c(onContainer.toLong()))
@@ -70,25 +104,26 @@ fun wearColors(accent: String, style: ColorStyle, contrast: ContrastLevel, dark:
     )
 }
 
+/**
+ * Il tema dell'orologio. Chiaro o scuro come il telefono: "Chiaro" e "Scuro" valgono come scelti,
+ * "Automatico" segue il tema che il telefono usa adesso (`payload.dark`); senza telefono, quello
+ * dell'orologio. Colori e caratteri di Wear Material 3 Expressive, con lo schema del telefono.
+ */
 @Composable
-fun WearAppTheme(
-    accent: String,
-    colorStyle: String,
-    contrast: String,
-    appearance: String,
-    palette: WatchPalette?,
-    content: @Composable () -> Unit,
-) {
-    val dark = when (appearance) {
+fun WearAppTheme(payload: WatchPayload, content: @Composable () -> Unit) {
+    val systemDark = isSystemInDarkTheme()
+    val dark = when (payload.appearance) {
         "dark" -> true
         "light" -> false
-        else -> isSystemInDarkTheme()
+        else -> payload.dark ?: systemDark
     }
-    val style = runCatching { ColorStyle.valueOf(colorStyle) }.getOrDefault(ColorStyle.tonalSpot)
-    val level = runCatching { ContrastLevel.valueOf(contrast) }.getOrDefault(ContrastLevel.standard)
-    val colors = remember(accent, style, level, dark, palette) { wearColors(accent, style, level, dark, palette) }
+    val style = runCatching { ColorStyle.valueOf(payload.colorStyle) }.getOrDefault(ColorStyle.tonalSpot)
+    val level = runCatching { ContrastLevel.valueOf(payload.contrast) }.getOrDefault(ContrastLevel.standard)
+    val colors = remember(payload.accent, style, level, dark, payload.palette, payload.scheme) {
+        wearColors(payload.accent, style, level, dark, payload.palette, payload.scheme)
+    }
     CompositionLocalProvider(LocalWearColors provides colors) {
-        MaterialTheme(content = content)
+        MaterialTheme(colorScheme = colors.wearScheme(), content = content)
     }
 }
 
