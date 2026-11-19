@@ -75,6 +75,8 @@ class Preferences(private val store: SharedPreferences) {
             "liveUpdates" to JsonPrimitive(true),
             // Come su iOS: avviso di una versione nuova su GitHub (Impostazioni › Generale). Non si sincronizza.
             "updateAlerts" to JsonPrimitive(true),
+            // Come su iOS (`showsPlusBanner`): banner in cima alle Impostazioni. Non si sincronizza.
+            "showsPlusBanner" to JsonPrimitive(true),
             // Solo su questo dispositivo, come su iOS: compiti del modulo Compiti già presi da Classeviva.
             "classevivaDoneHomework" to JsonArray(emptyList()),
         )
@@ -154,6 +156,7 @@ class Preferences(private val store: SharedPreferences) {
     val dynamicColor: Boolean get() = bool("dynamicColor")
     val liveUpdates: Boolean get() = bool("liveUpdates")
     val updateAlerts: Boolean get() = bool("updateAlerts")
+    val showsPlusBanner: Boolean get() = bool("showsPlusBanner")
 
     /** La voce si sincronizza con l'account BCW (scelta solo per questo dispositivo). */
     fun syncs(category: SyncCategory): Boolean = category.name !in strings("unsyncedCategories")
