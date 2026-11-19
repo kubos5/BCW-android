@@ -166,6 +166,8 @@ Requisiti: JDK 17, Android SDK 36, Android Studio o solo la riga di comando. Min
 
 La build debug ha ID `com.bcw.classeviva.debug`; la release `com.bcw.classeviva`. Per provare a mano usa "Prova la demo" (nessun account necessario).
 
+Le prestazioni (apertura, animazioni, cambio scheda) si giudicano sulla release, non sulla debug: la debug è `debuggable` e senza R8, e con Compose è 3-4 volte più lenta (misurato il 19/11/2026 sul Galaxy S24 Ultra: apertura a freddo circa 800 ms in debug, circa 200 ms in release, con lo stesso codice). La release è firmata con la chiave di debug, quindi si installa anche da Android Studio scegliendo la variante `release`. All'avvio non mettere lavoro pesante sul thread principale: colori del tema e sincronizzazione con l'orologio partono in background (`BCWApplication`, `WearSync`).
+
 L'app Wear OS è un modulo `:wear` separato: stesso `applicationId` (serve alla Data Layer di Wear OS), `minSdk 30` (Wear OS 3) e Wear Compose Material 3. La sincronizzazione con il telefono non è provabile end-to-end su emulatore senza un telefono abbinato: con `adb shell run-as com.bcw.classeviva.debug` si può scrivere a mano il payload in `shared_prefs/bcw.wear.xml` per provare l'interfaccia.
 
 ### Prove automatiche

@@ -56,12 +56,15 @@ object WearSync {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pending: Job? = null
 
-    /** Un salvataggio ravvicinato vale una sola spedizione. */
-    fun timetableChanged(context: Context, store: TimetableStore, preferences: Preferences) {
+    /**
+     * Un salvataggio ravvicinato vale una sola spedizione. Tutto il lavoro (payload, schemi di
+     * colore, Data Layer) gira in background: sul thread principale costava oltre 100 ms.
+     */
+    fun timetableChanged(context: Context, store: TimetableStore, preferences: Preferences, delayMillis: Long = 700) {
         pending?.cancel()
         pending = scope.launch {
-            delay(700)
-            pushNow(context, store, preferences)
+            delay(delayMillis)
+            send(context, store, preferences)
         }
     }
 
@@ -69,7 +72,13 @@ object WearSync {
     var lastSent: Long? by mutableStateOf(null)
         private set
 
+    /** Spedisce subito, in background (richiesta dell'orologio, "Invia l'orario ora"). */
     fun pushNow(context: Context, store: TimetableStore, preferences: Preferences) {
+        pending?.cancel()
+        pending = scope.launch { send(context, store, preferences) }
+    }
+
+    private fun send(context: Context, store: TimetableStore, preferences: Preferences) {
         runCatching {
             if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) != ConnectionResult.SUCCESS) return
             val now = System.currentTimeMillis()

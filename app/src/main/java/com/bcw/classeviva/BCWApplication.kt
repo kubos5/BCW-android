@@ -10,6 +10,8 @@ import com.bcw.classeviva.platform.LiveUpdates
 import com.bcw.classeviva.platform.Notifier
 import com.bcw.classeviva.platform.ReminderScheduler
 import com.bcw.classeviva.platform.WearSync
+import com.bcw.classeviva.ui.theme.ThemeSettings
+import com.bcw.classeviva.ui.theme.generatedTheme
 import com.bcw.classeviva.widget.Widgets
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +28,10 @@ class BCWApplication : Application() {
         super.onCreate()
         Notifier.createChannels(this)
         model = AppModel(this)
+        // I colori del tema (ColorEngine, oltre 100 ms in debug) si generano in background mentre
+        // si crea l'activity: il primo disegno li trova pronti invece di aspettarli.
+        val theme = ThemeSettings.from(model.preferences)
+        if (!theme.dynamicColor) Thread({ generatedTheme(theme.accent, theme.style, theme.contrast) }, "bcw-tema").start()
         model.hooks = object : PlatformHooks {
             override fun notify(title: String, body: String, tag: String, channel: String) {
                 val link = when {
@@ -53,7 +59,8 @@ class BCWApplication : Application() {
         // All'avvio in background (widget, notifiche) solo la cache: l'aggiornamento parte aprendo l'app.
         model.bootstrap(refresh = false)
         // Anche se l'orologio non ha chiesto nulla, l'ultimo orario gli resta a disposizione.
-        WearSync.pushNow(this, model.timetable, model.preferences)
+        // Qualche secondo dopo l'avvio, in background: l'apertura dell'app viene prima.
+        WearSync.timetableChanged(this, model.timetable, model.preferences, delayMillis = 3_000)
         lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
     }
 
