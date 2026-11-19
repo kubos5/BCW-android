@@ -145,7 +145,7 @@ private fun LinksSection() {
     var round by remember(activeID) { mutableIntStateOf(0) }
     val name = model.activeAccount?.name ?: "questo account Classeviva"
     if (!requested) {
-        ListGroup(header = "Account BCW abbinati", footer = "Puoi vedere a quali account BCW è abbinato $name e scollegarlo da ognuno. Per verificare l'accesso, il server BCW riceve il token della sessione di Classeviva (non la password).") {
+        ListGroup(header = "Account BCW abbinati", footer = "Puoi vedere a quali account BCW è abbinato $name e scollegarlo. Il server BCW riceve solo il token di Classeviva, non la password.") {
             item { ButtonRow("Mostra gli account BCW abbinati", "cloud", { requested = true }) }
         }
         return
@@ -158,7 +158,7 @@ private fun LinksSection() {
             error = e.message
         }
     }
-    ListGroup(header = "Account BCW abbinati", footer = "Gli account BCW con cui si entra in $name. Scollegandolo da uno, quell'account BCW non potrà più entrarci e l'orario sincronizzato per questo account viene eliminato dal server. Per toglierli basta l'accesso a Classeviva.") {
+    ListGroup(header = "Account BCW abbinati", footer = "Gli account BCW che possono entrare in $name. Scollegandone uno, non potrà più entrarci e l'orario sincronizzato verrà eliminato dal server.") {
         val l = links
         when {
             error != null -> {
@@ -207,7 +207,7 @@ private fun CloudSection() {
         item { ListRow("Server BCW", subtitle = BCWServer.host, leading = { FormIcon("server") }, onClick = { dialog = CloudDialog.server }, trailing = { ChevronRight() }) }
     }
     if (!model.isCloud) {
-        ListGroup(header = "Account BCW", footer = "Con un account BCW abbini i tuoi account Classeviva e ritrovi impostazioni, aspetto e orario su ogni dispositivo, anche nell'app per iPhone e sul web. Dopo l'accesso potrai abbinare gli account salvati su questo dispositivo.") {
+        ListGroup(header = "Account BCW", footer = "Con un account BCW ritrovi i tuoi account Classeviva, le impostazioni e l'orario su ogni dispositivo e sul web. Dopo l'accesso potrai abbinare gli account di questo dispositivo.") {
             item { ButtonRow("Accedi con un account BCW", "cloud", { dialog = CloudDialog.login }) }
             item { ButtonRow("Crea un account BCW", "userPlus", { dialog = CloudDialog.register }) }
             serverRow()
@@ -215,7 +215,7 @@ private fun CloudSection() {
     } else {
         val sync = model.sync
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            ListGroup(header = "Account BCW", footer = "Si sincronizzano le impostazioni (tranne blocco, promemoria, notifiche e colori del sistema, che valgono solo su questo dispositivo), l'aspetto e l'orario di ogni account abbinato, con i file allegati. Sotto scegli cosa sincronizzare.") {
+            ListGroup(header = "Account BCW", footer = "Si sincronizzano impostazioni, aspetto e orario di ogni account abbinato, con i file. Blocco, promemoria, notifiche e colori del sistema restano su questo dispositivo.") {
                 item { ListRow(model.cloudUser?.username ?: "", subtitle = "Account BCW", leading = { Avatar((model.cloudUser?.username ?: "?").take(1).uppercase(), 40.dp, color = Theme.scheme.primary, shape = "cookie9Sided") }) }
                 item {
                     ListRow("Sincronizzazione", subtitle = if (sync.status == SyncStatus.error || sync.status == SyncStatus.offline) sync.message else sync.fileWarning,
@@ -236,7 +236,7 @@ private fun CloudSection() {
                 }
                 item { ButtonRow("Elimina l'account BCW…", "trash", { dialog = CloudDialog.delete }, destructive = true) }
             }
-            ListGroup(header = "Da sincronizzare", footer = "Vale solo per questo dispositivo. Una voce spenta resta com'è qui e non cambia sugli altri dispositivi. Riaccendendo impostazioni, aspetto o compiti, questo dispositivo prende quelli dell'account BCW; riaccendendo l'orario vince il lato cambiato nel frattempo (se sono cambiati entrambi, questo dispositivo).") {
+            ListGroup(header = "Da sincronizzare", footer = "Vale solo per questo dispositivo: una voce spenta non cambia sugli altri. Riaccendendola arrivano i valori dell'account BCW; per l'orario vince il lato cambiato nel frattempo.") {
                 for (c in SyncCategory.entries) item(c) { SyncCategoryRow(c) }
             }
         }

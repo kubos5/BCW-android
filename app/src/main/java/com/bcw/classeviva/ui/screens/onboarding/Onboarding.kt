@@ -198,10 +198,10 @@ fun OnboardingScreen() {
     val index = steps.indexOf(current)
     val typing = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
-    fun go(delta: Int) {
+    fun go(delta: Int, checked: Boolean = false) {
         // Prima del passaggio dell'orario si guarda se l'orario c'è già: con l'account BCW appena
         // aperto può essere sul server e non ancora su questo dispositivo (al massimo 4 secondi).
-        if (delta > 0 && current == Step.bcw && prefs.showsTimetableTab && model.phase == Phase.signedIn) {
+        if (!checked && delta > 0 && current == Step.bcw && prefs.showsTimetableTab && model.phase == Phase.signedIn) {
             if (checkingTimetable) return
             checkingTimetable = true
             scope.launch {
@@ -211,7 +211,9 @@ fun OnboardingScreen() {
                 }
                 hasTimetable = !model.timetable.isEmpty
                 checkingTimetable = false
-                go(delta)
+                // Già controllato: senza `checked` questa chiamata (con il passaggio di prima) ricontrollava
+                // all'infinito. Se l'orario c'è, il passaggio sparisce e si va al successivo.
+                go(delta, checked = true)
             }
             return
         }

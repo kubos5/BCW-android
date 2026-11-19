@@ -190,14 +190,14 @@ private fun androidx.compose.foundation.lazy.LazyListScope.generalPane() {
         val ui = LocalUi.current
         ListGroup(
             header = "Informazioni",
-            footer = if (model.isCloud) "BCW (Better ClasseViVa) è un client non ufficiale e non è affiliato a Gruppo Spaggiari Parma S.p.A. Le credenziali degli account abbinati sono salvate cifrate nel tuo account BCW e inviate ai server di Classeviva per accedere."
-            else "BCW (Better ClasseViVa) è un client non ufficiale e non è affiliato a Gruppo Spaggiari Parma S.p.A. Le credenziali sono salvate cifrate solo su questo dispositivo e inviate esclusivamente ai server di Classeviva.",
+            footer = if (model.isCloud) "BCW (Better ClasseViVa) è un'app non ufficiale, non affiliata a Gruppo Spaggiari Parma S.p.A. Le credenziali sono salvate cifrate nel tuo account BCW e su questo dispositivo."
+            else "BCW (Better ClasseViVa) è un'app non ufficiale, non affiliata a Gruppo Spaggiari Parma S.p.A. Le credenziali restano cifrate su questo dispositivo e vanno solo ai server di Classeviva.",
         ) {
-            item { ValueRow("Versione", VERSION) }
+            item { ValueRow("Versione", VERSION, monospaced = true) }
             item { ValueRow("Ported by", "Mikqs") }
             item {
                 val scope = rememberCoroutineScope()
-                ListRow("Note di rilascio", subtitle = "Le novità di BCW", leading = { FormIcon("info") }, onClick = {
+                ListRow("Note di rilascio", subtitle = "Le novità dell'ultima versione di BCW", leading = { FormIcon("info") }, onClick = {
                     scope.launch {
                         ui.updates.latestNotes().fold(
                             onSuccess = { release -> if (release != null) ui.releaseSheet = release else ui.toast("Non ci sono ancora note di rilascio su GitHub") },
@@ -306,7 +306,7 @@ private fun AppearancePane() {
         }
         ListGroup(
             header = "Forme e movimento",
-            footer = "Espressive: animazioni a molla con un piccolo rimbalzo, come in Material 3 Expressive. Standard: senza rimbalzo. Ridotte: brevi e senza movimenti ampi. I caratteri arrotondati usano l'asse ROND di Google Sans Flex.",
+            footer = "Espressive: molle con un piccolo rimbalzo. Standard: senza rimbalzo. Ridotte: animazioni brevi, senza movimenti ampi.",
         ) {
             shapeMotionRows(p)
             if (!p.isDefaultAppearance) item { ButtonRow("Ripristina l'aspetto di BCW", "refresh", { p.resetAppearance() }) }
@@ -542,7 +542,7 @@ private fun TimetableSyncSection() {
     val model = LocalModel.current
     val nav = LocalNavigator.current
     if (!model.isCloud) {
-        ListGroup(header = "Sincronizzazione", footer = "Con un account BCW l'orario di ogni account Classeviva abbinato, con i file allegati, si sincronizza tra i tuoi dispositivi (anche con l'app per iPhone e con il web).") {
+        ListGroup(header = "Sincronizzazione", footer = "Con un account BCW l'orario, con i file, si sincronizza su tutti i tuoi dispositivi e sul web.") {
             item { ButtonRow("Accedi con un account BCW…", "cloud", { nav.push(Page.Account) }) }
         }
         return
@@ -590,7 +590,29 @@ private fun NotificationsPane() {
             }
             item { ButtonRow("Esporta l'agenda nel calendario", "calendarPlus", { com.bcw.classeviva.ui.screens.exportAgenda(model, ui) }) }
         }
+        // Come l'avviso di "Aggiorna app in background" di iOS 4.0: con BCW limitata in background (batteria)
+        // Android non esegue l'aggiornamento e le novità arrivano solo aprendo l'app. Si ricontrolla al ritorno.
+        var restricted by remember { mutableStateOf(false) }
+        androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+            restricted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                (context.getSystemService(android.app.ActivityManager::class.java)?.isBackgroundRestricted == true)
+            onPauseOrDispose { }
+        }
         ListGroup(header = "Novità", footer = "Una notifica per ogni novità, anche con BCW in secondo piano. È Android a decidere quando aggiornare: possono arrivare con un po' di ritardo. La prima volta BCW ricorda ciò che c'è già senza notificarlo.") {
+            if (restricted && NewsKind.entries.any { p.newsEnabled(it) }) item("restricted") {
+                ListRow(
+                    "Aggiornamento in background limitato",
+                    subtitle = "Le notifiche arrivano solo aprendo BCW. Tocca per togliere il limite nelle impostazioni di Android.",
+                    titleColor = Theme.scheme.error,
+                    multiline = true,
+                    leading = { FormIcon("alertTriangle", Theme.scheme.error) },
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                    },
+                    trailing = { Icon("externalLink", size = 18.dp, tint = Theme.scheme.onSurfaceVariant) },
+                )
+            }
             for (kind in NewsKind.entries) item(kind) {
                 ToggleRow(kind.title, p.newsEnabled(kind), { on ->
                     if (on) withPermission { p.setNews(kind, true); com.bcw.classeviva.platform.BackgroundRefresh.schedule(context, model) }
