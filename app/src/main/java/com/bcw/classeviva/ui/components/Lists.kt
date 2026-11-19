@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bcw.classeviva.ui.icons.Icon
 import com.bcw.classeviva.ui.theme.Theme
 
@@ -206,9 +207,11 @@ fun ToggleRow(
 
 /** Riga con un valore a destra. */
 @Composable
-fun ValueRow(title: String, value: String, modifier: Modifier = Modifier, icon: String? = null, subtitle: String? = null) {
+fun ValueRow(title: String, value: String, modifier: Modifier = Modifier, icon: String? = null, subtitle: String? = null, monospaced: Boolean = false) {
     ListRow(title, modifier, subtitle = subtitle, leading = icon?.let { { FormIcon(it) } }, trailing = {
-        Text(value, style = Theme.type.style(14, 500), color = Theme.scheme.onSurfaceVariant, maxLines = 1)
+        // Valori tecnici (versione, codici): carattere monospazio, che Google Sans Flex non ha (come `ValueRow(monospaced:)` di iOS 4.0).
+        val style = if (monospaced) androidx.compose.ui.text.TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 13.sp) else Theme.type.style(14, 500)
+        Text(value, style = style, color = Theme.scheme.onSurfaceVariant, maxLines = 1)
     })
 }
 
