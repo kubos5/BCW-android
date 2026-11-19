@@ -2,17 +2,11 @@ package com.bcw.classeviva.widget
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
 import android.net.Uri
-import androidx.compose.ui.graphics.toArgb
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
@@ -21,17 +15,17 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.LinearProgressIndicator
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
@@ -39,7 +33,9 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
+import androidx.glance.layout.RowScope
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
@@ -55,17 +51,19 @@ import androidx.glance.unit.ColorProvider as GlanceColor
 import com.bcw.classeviva.BCWApplication
 import com.bcw.classeviva.MainActivity
 import com.bcw.classeviva.R
+import com.bcw.classeviva.data.AgendaEvent
 import com.bcw.classeviva.data.AgendaKind
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.Grade
 import com.bcw.classeviva.data.Phase
 import com.bcw.classeviva.data.WidgetBrand
 import com.bcw.classeviva.data.timetable.EntryTint
-import com.bcw.classeviva.platform.LivePlan
 import com.bcw.classeviva.data.timetable.TimeOfDay
 import com.bcw.classeviva.data.timetable.Weekday
 import com.bcw.classeviva.data.timetable.defaultTimetableDay
 import com.bcw.classeviva.data.timetable.timetableLayout
+import com.bcw.classeviva.platform.LivePhase
+import com.bcw.classeviva.platform.LivePlan
 import com.bcw.classeviva.ui.theme.BCWColors
 import com.bcw.classeviva.ui.theme.ThemeSettings
 import com.bcw.classeviva.ui.theme.ToneColors
@@ -73,6 +71,9 @@ import com.bcw.classeviva.ui.theme.bcwColors
 import com.bcw.classeviva.util.Dates
 import com.bcw.classeviva.util.Fmt
 import com.bcw.classeviva.util.GradeFormat
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 
 /** Aggiorna tutti i widget quando cambiano i dati (orario, agenda, voti, tema). */
 object Widgets {
@@ -96,126 +97,263 @@ object Widgets {
         return bcwColors(context, settings, false) to bcwColors(context, settings, true)
     }
 
-    fun providers(context: Context): androidx.glance.color.ColorProviders {
-        val (light, dark) = colors(context)
-        return ColorProviders(light = light.scheme, dark = dark.scheme)
-    }
+    fun providers(light: BCWColors, dark: BCWColors): androidx.glance.color.ColorProviders =
+        ColorProviders(light = light.scheme, dark = dark.scheme)
 
     /** Colore che segue il tema chiaro o scuro del telefono. */
     fun dual(light: Color, dark: Color): GlanceColor = ColorProvider(day = light, night = dark)
 }
 
+/**
+ * Misure dei widget, con la scala della app: contenitore con gli angoli del sistema (16-28 dp a
+ * seconda del launcher) e 14 dp di margine, voci delle liste a 16 dp all'esterno del gruppo e 4 dp
+ * tra una voce e l'altra (come `ListGroup`), 2 dp di spazio tra le voci.
+ */
+private object WidgetShape {
+    val padding = 14.dp
+    val header = 22.dp
+    val gap = 2.dp
+}
+
+/** I due temi della app, per i colori che non sono ruoli di Material (materie, voti). */
+private class Palette(val light: BCWColors, val dark: BCWColors) {
+    fun of(pick: (BCWColors) -> Color): GlanceColor = Widgets.dual(pick(light), pick(dark))
+}
+
+// MARK: - Struttura comune
+
+/**
+ * Il contenitore di ogni widget: sfondo `surfaceContainer` come le card della app (o il colore
+ * scelto, es. quello della materia), angoli del sistema, intestazione con icona e nome a sinistra e
+ * il marchio a destra, poi il contenuto.
+ */
 @Composable
-private fun WidgetFrame(context: Context, link: String, content: @Composable () -> Unit) {
+private fun WidgetFrame(
+    context: Context, link: String, palette: Palette, icon: String, title: String,
+    background: GlanceColor? = null, accent: GlanceColor? = null,
+    content: @Composable () -> Unit,
+) {
     val brand = Widgets.model(context).preferences.widgetBrand
-    val (light, dark) = Widgets.colors(context)
-    // Stesso contenitore delle card della app (surfaceContainer), dalla palette di sistema se attiva.
-    val frame = Widgets.dual(light.scheme.surfaceContainer, dark.scheme.surfaceContainer)
-    GlanceTheme(colors = Widgets.providers(context)) {
-        // Contenitore esterno a 32dp, con 16dp di padding: gli elementi interni hanno 16dp (32 − 16).
+    GlanceTheme(colors = Widgets.providers(palette.light, palette.dark)) {
+        val corners = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius) else GlanceModifier.cornerRadius(24.dp)
         Box(
-            GlanceModifier.fillMaxSize().background(frame).cornerRadius(WidgetShape.frame).padding(WidgetShape.padding).clickable(Widgets.open(context, link)),
+            GlanceModifier.fillMaxSize().appWidgetBackground().background(background ?: palette.of { it.scheme.surfaceContainer })
+                .then(corners).padding(WidgetShape.padding).clickable(Widgets.open(context, link)),
         ) {
             Column(GlanceModifier.fillMaxSize()) {
-                if (brand != WidgetBrand.hidden) BrandMark(brand)
+                Header(icon, title, accent ?: GlanceTheme.colors.primary, brand)
                 Box(GlanceModifier.fillMaxWidth().defaultWeight()) { content() }
             }
         }
     }
 }
 
-/** Forme dei widget, con la scala di raggi della app (scala "standard"): esterno 32, interno 16, piccolo 8. */
-object WidgetShape {
-    val frame = 32.dp
-    val padding = 16.dp
-    val item = 16.dp
-    val chip = 8.dp
-}
-
-/** Marchio BCW in alto a destra: l'icona dell'app e, se scelto, il nome. */
+/** Intestazione: icona e nome del widget a sinistra, il marchio BCW a destra (se non è nascosto). */
 @Composable
-private fun BrandMark(brand: WidgetBrand) {
-    Row(GlanceModifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(GlanceModifier.defaultWeight())
-        Image(
-            provider = ImageProvider(R.drawable.ic_notification), contentDescription = "BCW",
-            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary), modifier = GlanceModifier.size(14.dp),
-        )
-        if (brand == WidgetBrand.full) {
-            Spacer(GlanceModifier.width(4.dp))
-            Text("BCW", style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+private fun Header(icon: String, title: String, color: GlanceColor, chosen: WidgetBrand) {
+    val width = innerWidth()
+    // Nei widget stretti (2 colonne) il marchio è solo l'icona: il nome del widget resta intero.
+    val brand = if (chosen == WidgetBrand.full && width < 190.dp) WidgetBrand.icon else chosen
+    Row(GlanceModifier.fillMaxWidth().height(WidgetShape.header).padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconImage(icon, 16.dp, color)
+        Spacer(GlanceModifier.width(6.dp))
+        val brandWidth = when (brand) { WidgetBrand.full -> 52.dp; WidgetBrand.icon -> 22.dp; else -> 0.dp }
+        Box(GlanceModifier.defaultWeight()) {
+            SansText(title, 13f, color, (width - 22.dp - brandWidth).coerceAtLeast(40.dp), weight = 650, rond = 100)
+        }
+        if (brand != WidgetBrand.hidden) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_notification), contentDescription = "BCW",
+                colorFilter = ColorFilter.tint(color), modifier = GlanceModifier.size(14.dp),
+            )
+            if (brand == WidgetBrand.full) {
+                Spacer(GlanceModifier.width(3.dp))
+                SansText("BCW", 12f, color, 40.dp, weight = 750, rond = 100)
+            }
         }
     }
 }
 
+/** Larghezza utile dentro il contenitore. */
 @Composable
-private fun Empty(text: String) {
-    Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp))
+private fun innerWidth(): Dp = (LocalSize.current.width - WidgetShape.padding * 2).coerceAtLeast(40.dp)
+
+/** Altezza utile sotto l'intestazione. */
+@Composable
+private fun innerHeight(): Dp = (LocalSize.current.height - WidgetShape.padding * 2 - WidgetShape.header).coerceAtLeast(20.dp)
+
+/** Titoli e numeri in Google Sans Flex (disegnati da `WidgetArt`), colorati con il tema. */
+@Composable
+private fun SansText(
+    text: String, sizeSp: Float, color: GlanceColor, maxWidth: Dp, weight: Int = 600, rond: Int = 100,
+    maxLines: Int = 1, center: Boolean = false, tabular: Boolean = false, modifier: GlanceModifier = GlanceModifier,
+) {
+    if (text.isEmpty()) return
+    val drawn = WidgetArt.text(LocalContext.current, text, sizeSp, weight, rond, maxWidth.value, maxLines, center, tabular)
+    Image(
+        provider = ImageProvider(drawn.bitmap), contentDescription = text, colorFilter = ColorFilter.tint(color),
+        contentScale = ContentScale.Fit, modifier = modifier.width(drawn.widthDp.dp).height(drawn.heightDp.dp),
+    )
+}
+
+/** Un'icona Material Symbols (gli stessi tracciati della app), colorata con il tema. */
+@Composable
+private fun IconImage(name: String, size: Dp, color: GlanceColor, modifier: GlanceModifier = GlanceModifier) {
+    Image(
+        provider = ImageProvider(WidgetArt.icon(LocalContext.current, name, size.value)), contentDescription = null,
+        colorFilter = ColorFilter.tint(color), modifier = modifier.size(size),
+    )
+}
+
+/** Testo nel carattere di sistema (descrizioni e righe delle liste). */
+@Composable
+private fun BodyText(text: String, sizeSp: Int, color: GlanceColor, maxLines: Int = 1, bold: Boolean = false, modifier: GlanceModifier = GlanceModifier) {
+    Text(text, maxLines = maxLines, modifier = modifier, style = TextStyle(color = color, fontSize = sizeSp.sp, fontWeight = if (bold) FontWeight.Medium else FontWeight.Normal))
+}
+
+/**
+ * Voce di una lista segmentata: angoli ampi solo all'esterno del gruppo, come `ListGroup`. Con
+ * `height` nullo la voce prende la sua parte dello spazio rimasto (peso), così la lista arriva in
+ * fondo anche quando il launcher dichiara un'altezza più piccola di quella vera.
+ */
+@Composable
+private fun androidx.glance.layout.ColumnScope.SegmentRow(index: Int, count: Int, color: GlanceColor, height: Dp?, content: @Composable RowScope.() -> Unit) {
+    val shape = when {
+        count == 1 -> R.drawable.widget_seg_single
+        index == 0 -> R.drawable.widget_seg_top
+        index == count - 1 -> R.drawable.widget_seg_bottom
+        else -> R.drawable.widget_seg_middle
     }
+    // Lo spazio dalla voce sopra (2 dp) è dentro il disegno di sfondo: la voce resta un figlio solo.
+    val gap = if (index > 0) WidgetShape.gap else 0.dp
+    Row(
+        GlanceModifier.fillMaxWidth().then(if (height != null) GlanceModifier.height(height + gap) else GlanceModifier.defaultWeight())
+            .background(ImageProvider(shape), colorFilter = ColorFilter.tint(color)).padding(start = 12.dp, end = 12.dp, top = gap),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/**
+ * Quante voci di una lista mostrare in `available` (almeno `minHeight` ciascuna, lasciando posto a
+ * "e altre N" se non entrano tutte) e la loro altezza: `null` = si allungano fino in fondo (peso),
+ * altrimenti `maxHeight` perché sono poche e starebbero troppo alte.
+ */
+private class ListFit(val count: Int, val height: Dp?)
+
+private fun fit(total: Int, available: Dp, minHeight: Dp, maxHeight: Dp): ListFit {
+    val gap = WidgetShape.gap.value
+    fun fitting(space: Float) = min(total, max(0, floor((space + gap) / (minHeight.value + gap)).toInt()))
+    // Al massimo 9 voci: Glance tiene al massimo 10 figli per colonna.
+    var count = min(9, fitting(available.value))
+    if (count < total) count = min(9, fitting(available.value - 22f))
+    if (count == 0) return ListFit(0, null)
+    val few = count == total && count * maxHeight.value + gap * (count - 1) <= available.value
+    return ListFit(count, if (few) maxHeight else null)
+}
+
+/** "e altre N", sotto una lista che non entra tutta. */
+@Composable
+private fun MoreLine(hidden: Int, noun: Pair<String, String>) {
+    if (hidden <= 0) return
+    Spacer(GlanceModifier.height(4.dp))
+    BodyText("e ${if (hidden == 1) "un'altra ${noun.first}" else "altre $hidden ${noun.second}"}", 12, GlanceTheme.colors.onSurfaceVariant, modifier = GlanceModifier.padding(start = 12.dp))
+}
+
+@Composable
+private fun Empty(icon: String, text: String) {
+    Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically) {
+        IconImage(icon, 28.dp, GlanceTheme.colors.onSurfaceVariant)
+        Spacer(GlanceModifier.height(6.dp))
+        BodyText(text, 13, GlanceTheme.colors.onSurfaceVariant)
+    }
+}
+
+private fun EntryTint.color(c: BCWColors): Color = when (this) {
+    is EntryTint.Subject -> c.subject(index).color
+    EntryTint.Break -> c.breakTint
+    is EntryTint.Hex -> Color(0xFF000000.toInt() or hex)
+}
+
+private fun EntryTint.container(c: BCWColors): Color = when (this) {
+    is EntryTint.Subject -> c.subject(index).container
+    EntryTint.Break -> c.scheme.surfaceContainerHigh
+    is EntryTint.Hex -> c.scheme.secondaryContainer
+}
+
+private fun EntryTint.onContainer(c: BCWColors): Color = when (this) {
+    is EntryTint.Subject -> c.subject(index).onContainer
+    EntryTint.Break -> c.scheme.onSurface
+    is EntryTint.Hex -> c.scheme.onSecondaryContainer
 }
 
 // MARK: - Orario
 
 class TimetableWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val model = Widgets.model(context)
         val (light, dark) = Widgets.colors(context)
-        provideContent { WidgetFrame(context, "bcw://orario") { TimetableContent(model, light, dark) } }
+        val palette = Palette(light, dark)
+        provideContent { WidgetFrame(context, "bcw://orario", palette, "timetable", "Orario") { TimetableContent(model, palette) } }
     }
 }
 
+/** Il giorno dell'orario che si vedrebbe nella app: titolo grande, riepilogo e le lezioni. */
 @Composable
-private fun TimetableContent(model: AppModel, light: BCWColors, dark: BCWColors) {
-    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
+private fun TimetableContent(model: AppModel, palette: Palette) {
+    if (model.phase != Phase.signedIn) return Empty("timetable", "Accedi a BCW")
     val store = model.timetable
+    if (store.isEmpty) return Empty("timetable", "Crea l'orario nella app")
     val day = defaultTimetableDay({ store.entries(it, false) })
-    val entries = store.entries(Weekday.of(day), false)
-    val layout = timetableLayout(entries, splitAtBreaks = true)
+    val layout = timetableLayout(store.entries(Weekday.of(day), false), splitAtBreaks = true)
+    val blocks = layout.blocks.sortedBy { it.start }
     val minute = if (Dates.isToday(day)) Dates.nowMinute() else -1
     val title = when {
         Dates.isToday(day) -> "Oggi"
         Dates.isTomorrow(day) -> "Domani"
         else -> Weekday.name(Weekday.of(day))
     }
+    val width = innerWidth()
     Column(GlanceModifier.fillMaxSize()) {
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold))
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            SansText(title, 24f, GlanceTheme.colors.onSurface, width * 0.6f, weight = 550, rond = 100)
             Spacer(GlanceModifier.width(8.dp))
-            Text(Fmt.shortDay(day), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.Medium))
+            BodyText(Fmt.shortDay(day), 13, GlanceTheme.colors.onSurfaceVariant, modifier = GlanceModifier.padding(bottom = 3.dp))
         }
         layout.span?.let {
-            Text("${layout.blocks.size} lezioni · ${TimeOfDay.string(it.first)}–${TimeOfDay.string(it.last)}", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+            BodyText("${blocks.size} ${if (blocks.size == 1) "lezione" else "lezioni"} · ${TimeOfDay.string(it.first)}–${TimeOfDay.string(it.last)}", 12, GlanceTheme.colors.onSurfaceVariant)
         }
         Spacer(GlanceModifier.height(8.dp))
-        if (layout.blocks.isEmpty()) return@Column Empty(if (store.isEmpty) "Crea l'orario nell'app" else "Nessuna lezione")
-        LazyColumn {
-            items(layout.blocks.sortedBy { it.start }, itemId = { it.id.hashCode().toLong() }) { block ->
-                val first = block.entries.first()
-                val current = minute in block.start until block.end
-                fun tint(c: BCWColors) = when (val t = store.tint(first)) {
-                    is EntryTint.Subject -> c.subject(t.index).color
-                    EntryTint.Break -> c.breakTint
-                    is EntryTint.Hex -> Color(0xFF000000.toInt() or t.hex)
-                }
-                Column(GlanceModifier.fillMaxWidth().padding(bottom = 2.dp)) {
-                    Row(
-                        GlanceModifier.fillMaxWidth().background(if (current) GlanceTheme.colors.primaryContainer else Widgets.dual(light.scheme.surfaceContainerHigh, dark.scheme.surfaceContainerHigh))
-                            .cornerRadius(WidgetShape.item).padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(TimeOfDay.string(block.start), style = TextStyle(color = if (current) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium))
-                        Spacer(GlanceModifier.width(8.dp))
-                        Box(GlanceModifier.width(4.dp).height(18.dp).background(Widgets.dual(tint(light), tint(dark))).cornerRadius(2.dp)) {}
-                        Spacer(GlanceModifier.width(8.dp))
-                        Text(first.displayTitle, maxLines = 1, modifier = GlanceModifier.defaultWeight(),
-                            style = TextStyle(color = if (current) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurface, fontSize = 14.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium))
-                        if (current) Text("In corso", style = TextStyle(color = GlanceTheme.colors.onPrimaryContainer, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-                        else if (first.room.isNotEmpty()) Text(first.room, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
-                    }
+        if (blocks.isEmpty()) return@Column Empty("timetable", "Nessuna lezione")
+        val list = fit(blocks.size, innerHeight() - 30.dp - 16.dp - 8.dp, 38.dp, 52.dp)
+        val count = list.count
+        val rowHeight = list.height
+        Column(GlanceModifier.fillMaxWidth().defaultWeight()) {
+        blocks.take(count).forEachIndexed { index, block ->
+            val first = block.entries.first()
+            val tint = store.tint(first)
+            val current = minute in block.start until block.end
+            val on = if (current) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurface
+            val onVariant = if (current) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurfaceVariant
+            SegmentRow(index, count, if (current) GlanceTheme.colors.primaryContainer else palette.of { it.scheme.surfaceContainerHigh }, rowHeight) {
+                SansText(TimeOfDay.string(block.start), 14f, onVariant, 48.dp, weight = 600, rond = 30, tabular = true)
+                Spacer(GlanceModifier.width(8.dp))
+                Box(GlanceModifier.width(4.dp).height(20.dp).background(palette.of { tint.color(it) }).cornerRadius(2.dp)) {}
+                Spacer(GlanceModifier.width(10.dp))
+                BodyText(first.displayTitle, 14, on, bold = true, modifier = GlanceModifier.defaultWeight())
+                if (current) {
+                    Spacer(GlanceModifier.width(6.dp))
+                    BodyText("In corso", 12, on, bold = true)
+                } else if (first.room.isNotEmpty()) {
+                    Spacer(GlanceModifier.width(6.dp))
+                    BodyText(first.room, 12, onVariant)
                 }
             }
         }
+        }
+        MoreLine(blocks.size - count, "lezione" to "lezioni")
     }
 }
 
@@ -226,41 +364,55 @@ class TimetableWidgetReceiver : GlanceAppWidgetReceiver() {
 // MARK: - Compiti e verifiche
 
 class AgendaWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val model = Widgets.model(context)
         val (light, dark) = Widgets.colors(context)
-        provideContent { WidgetFrame(context, "bcw://dashboard") { AgendaContent(model, light, dark) } }
+        val palette = Palette(light, dark)
+        provideContent { WidgetFrame(context, "bcw://dashboard", palette, "book", "Compiti e verifiche") { AgendaContent(model, palette) } }
+    }
+}
+
+/**
+ * Compiti e verifiche dei prossimi 14 giorni, tutti nella stessa lista segmentata: le verifiche si
+ * riconoscono dall'icona nel terziario, i compiti dall'icona nel secondario (come nella app).
+ */
+@Composable
+private fun AgendaContent(model: AppModel, palette: Palette) {
+    if (model.phase != Phase.signedIn) return Empty("book", "Accedi a BCW")
+    val today = Dates.today()
+    val events = model.agenda.filter { !it.day.isBefore(today) && it.day.isBefore(today.plusDays(14)) && !(it.kind == AgendaKind.homework && model.preferences.isCompleted(it)) }
+        .sortedWith(compareBy({ it.day }, { if (it.kind == AgendaKind.test) 0 else 1 }))
+    if (events.isEmpty()) return Empty("book", "Niente in programma")
+    val list = fit(events.size, innerHeight(), 54.dp, 62.dp)
+    val count = list.count
+    val rowHeight = list.height
+    Column(GlanceModifier.fillMaxSize()) {
+        Column(GlanceModifier.fillMaxWidth().defaultWeight()) {
+            events.take(count).forEachIndexed { index, e -> AgendaRow(e, index, count, rowHeight, palette) }
+        }
+        MoreLine(events.size - count, "voce" to "voci")
     }
 }
 
 @Composable
-private fun AgendaContent(model: AppModel, light: BCWColors, dark: BCWColors) {
-    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
-    val today = Dates.today()
-    val events = model.agenda.filter { !it.day.isBefore(today) && it.day.isBefore(today.plusDays(14)) && !(it.kind == AgendaKind.homework && model.preferences.isCompleted(it)) }
-        .sortedWith(compareBy({ it.day }, { if (it.kind == AgendaKind.test) 0 else 1 }))
-    Column(GlanceModifier.fillMaxSize()) {
-        Text("Compiti e verifiche", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold))
-        Spacer(GlanceModifier.height(8.dp))
-        if (events.isEmpty()) return@Column Empty("Niente in programma")
-        LazyColumn {
-            items(events.take(30), itemId = { it.id }) { e ->
-                val test = e.kind == AgendaKind.test
-                Column(GlanceModifier.fillMaxWidth().padding(bottom = 2.dp)) {
-                    Column(
-                        GlanceModifier.fillMaxWidth().background(if (test) GlanceTheme.colors.tertiaryContainer else Widgets.dual(light.scheme.surfaceContainerHigh, dark.scheme.surfaceContainerHigh)).cornerRadius(WidgetShape.item).padding(horizontal = 12.dp, vertical = 10.dp),
-                    ) {
-                        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(e.title, maxLines = 1, modifier = GlanceModifier.defaultWeight(),
-                                style = TextStyle(color = if (test) GlanceTheme.colors.onTertiaryContainer else GlanceTheme.colors.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold))
-                            Text(Fmt.relativeShortDayName(e.day), style = TextStyle(color = if (test) GlanceTheme.colors.onTertiaryContainer else GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
-                        }
-                        Text((if (test) "Verifica · " else "") + e.notes.ifEmpty { "Nessuna descrizione" }, maxLines = 2,
-                            style = TextStyle(color = if (test) GlanceTheme.colors.onTertiaryContainer else GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
-                    }
-                }
-            }
+private fun androidx.glance.layout.ColumnScope.AgendaRow(e: AgendaEvent, index: Int, count: Int, height: Dp?, palette: Palette) {
+    val test = e.kind == AgendaKind.test
+    SegmentRow(index, count, palette.of { it.scheme.surfaceContainerHigh }, height) {
+        Box(
+            GlanceModifier.size(32.dp).background(if (test) GlanceTheme.colors.tertiaryContainer else GlanceTheme.colors.secondaryContainer).cornerRadius(16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            IconImage(if (test) "test" else "book", 18.dp, if (test) GlanceTheme.colors.onTertiaryContainer else GlanceTheme.colors.onSecondaryContainer)
         }
+        Spacer(GlanceModifier.width(10.dp))
+        Column(GlanceModifier.defaultWeight()) {
+            BodyText(e.title, 14, GlanceTheme.colors.onSurface, bold = true)
+            BodyText((if (test) "Verifica · " else "") + e.notes.ifEmpty { "Nessuna descrizione" }, 12, GlanceTheme.colors.onSurfaceVariant)
+        }
+        Spacer(GlanceModifier.width(8.dp))
+        BodyText(Fmt.relativeShortDayName(e.day), 12, if (Dates.isToday(e.day)) GlanceTheme.colors.primary else GlanceTheme.colors.onSurfaceVariant, bold = Dates.isToday(e.day))
     }
 }
 
@@ -277,127 +429,10 @@ class AverageWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val model = Widgets.model(context)
         val (light, dark) = Widgets.colors(context)
-        val night = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        provideContent { WidgetFrame(context, "bcw://voti") { AverageContent(model, light, dark, night) } }
+        val palette = Palette(light, dark)
+        provideContent { WidgetFrame(context, "bcw://voti", palette, "graduationCap", "Voti") { AverageContent(model, palette) } }
     }
 }
-
-@Composable
-private fun AverageContent(model: AppModel, light: BCWColors, dark: BCWColors, night: Boolean) {
-    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
-    val average = model.gradeBook.average()
-    fun tone(c: BCWColors) = when {
-        average == null -> c.neutral
-        average >= 6 -> c.good
-        average >= 5.5 -> c.fair
-        else -> c.poor
-    }
-    val size = LocalSize.current
-    if (size.height >= 180.dp) {
-        ExpandedAverage(model, average, if (night) dark else light, size)
-        return
-    }
-    Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            GlanceModifier.size(84.dp).background(Widgets.dual(tone(light).container, tone(dark).container)).cornerRadius(42.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(GradeFormat.average(average), style = TextStyle(color = Widgets.dual(tone(light).onContainer, tone(dark).onContainer), fontSize = 26.sp, fontWeight = FontWeight.Bold))
-        }
-        Spacer(GlanceModifier.height(8.dp))
-        Text("Media generale", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium))
-    }
-}
-
-/**
- * Media ingrandita: la media in alto e gli ultimi voti in griglia. Colonne: 1, o 2 se il widget è
- * largo. Righe: quante ne entrano nell'altezza, fra 2 e 10.
- */
-@Composable
-private fun ExpandedAverage(model: AppModel, average: Double?, c: BCWColors, size: androidx.compose.ui.unit.DpSize) {
-    val cols = if (size.width >= 240.dp) 2 else 1
-    // Altezza tolta: margini del contenitore, marchio, l'anello con la scritta e i margini tra le righe.
-    val listHeight = size.height - WidgetShape.padding * 2 - 22.dp - 120.dp - 20.dp - 16.dp
-    // Ogni riga: cella di 56dp più 12dp di spazio.
-    val rows = (listHeight.value / 68f).toInt().coerceIn(2, 10)
-    val recent = model.gradeBook.grades.sortedByDescending { it.date }.take(rows * cols)
-    val ring = toneOf(average, c)
-    Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Come nella schermata Voti: anello ondulato con l'avanzamento e il numero al centro.
-        Box(GlanceModifier.size(120.dp), contentAlignment = Alignment.Center) {
-            Image(
-                provider = ImageProvider(WidgetArt.ring(((average ?: 0.0) / 10.0).toFloat().coerceIn(0f, 1f), ring.container.toArgb(), ring.color.toArgb(), 180)),
-                contentDescription = null, modifier = GlanceModifier.size(120.dp),
-            )
-            Text(GradeFormat.average(average), style = TextStyle(color = c.scheme.onSurface.toGlance(), fontSize = 30.sp, fontWeight = FontWeight.Bold))
-        }
-        Text("Media generale", style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.Medium))
-        Spacer(GlanceModifier.height(8.dp))
-        if (recent.isEmpty()) return@Column Empty("Nessun voto")
-        for (row in recent.chunked(cols)) {
-            Row(GlanceModifier.fillMaxWidth()) {
-                for (grade in row) {
-                    GradeCell(grade, c, GlanceModifier.defaultWeight())
-                    Spacer(GlanceModifier.width(8.dp))
-                }
-            }
-            Spacer(GlanceModifier.height(12.dp))
-        }
-    }
-}
-
-/** Immagini dei voti, disegnate come nella schermata Voti: anello ondulato e biscotti a nove lobi. */
-private object WidgetArt {
-    private const val RING_WAVES = 11
-    private const val LOBES = 9
-
-    /** Anello con avanzamento (`progress` 0..1), come `AverageRing` della app. */
-    fun ring(progress: Float, track: Int, color: Int, px: Int): Bitmap {
-        val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val stroke = px * 0.09f
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE; strokeWidth = stroke; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
-        }
-        val center = px / 2f
-        val base = center - stroke - px * 0.02f
-        val amp = px * 0.03f
-        paint.color = track
-        canvas.drawPath(wavy(center, base, amp, RING_WAVES, 0.0, 2 * PI, 240), paint)
-        if (progress > 0f) {
-            paint.color = color
-            canvas.drawPath(wavy(center, base, amp, RING_WAVES, 0.0, 2 * PI * progress, (240 * progress).toInt().coerceAtLeast(8)), paint)
-        }
-        return bitmap
-    }
-
-    /** Biscotto a nove lobi per i voti che fanno media, cerchio per gli altri. */
-    fun badge(fill: Int, px: Int, lobed: Boolean): Bitmap {
-        val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = fill }
-        val center = px / 2f
-        val base = px / 2f * 0.9f
-        val amp = if (lobed) base * 0.07f else 0f
-        canvas.drawPath(wavy(center, base, amp, if (lobed) LOBES else 1, 0.0, 2 * PI, 240, lobed), paint)
-        return bitmap
-    }
-
-    private fun wavy(cx: Float, base: Float, amp: Float, waves: Int, from: Double, to: Double, steps: Int, closed: Boolean = false): Path {
-        val path = Path()
-        for (i in 0..steps) {
-            val t = from + (to - from) * i / steps
-            val r = base + amp * sin(waves * t).toFloat()
-            val x = cx + r * cos(t - PI / 2).toFloat()
-            val y = cx + r * sin(t - PI / 2).toFloat()
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        if (closed) path.close()
-        return path
-    }
-}
-
-private fun Color.toGlance(): GlanceColor = Widgets.dual(this, this)
 
 private fun toneOf(average: Double?, c: BCWColors) = when {
     average == null -> c.neutral
@@ -410,25 +445,73 @@ private fun toneOf(average: Double?, c: BCWColors) = when {
 private fun gradeToneOf(g: Grade, c: BCWColors): ToneColors =
     if (g.canceled || !g.countsTowardAverage) c.neutral else toneOf(g.value, c)
 
+/**
+ * La media generale nell'anello ondulato della schermata Voti; se il widget è più alto, sotto gli
+ * ultimi voti in una lista segmentata (due colonne se è largo), solo quelli che entrano interi.
+ */
+@Composable
+private fun AverageContent(model: AppModel, palette: Palette) {
+    if (model.phase != Phase.signedIn) return Empty("graduationCap", "Accedi a BCW")
+    val average = model.gradeBook.average()
+    val height = innerHeight()
+    val ring = if (height >= 150.dp) 96.dp else min(height.value - 22f, 84f).coerceAtLeast(48f).dp
+    val progress = ((average ?: 0.0) / 10.0).toFloat().coerceIn(0f, 1f)
+    val context = LocalContext.current
+    val px = (ring.value * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+    Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(GlanceModifier.size(ring), contentAlignment = Alignment.Center) {
+            Image(
+                provider = ImageProvider(WidgetArt.ringMask(1f, px)), contentDescription = null,
+                colorFilter = ColorFilter.tint(palette.of { toneOf(average, it).container }), modifier = GlanceModifier.size(ring),
+            )
+            if (progress > 0f) Image(
+                provider = ImageProvider(WidgetArt.ringMask(progress, px)), contentDescription = null,
+                colorFilter = ColorFilter.tint(palette.of { toneOf(average, it).color }), modifier = GlanceModifier.size(ring),
+            )
+            SansText(GradeFormat.average(average), ring.value * 0.23f, GlanceTheme.colors.onSurface, ring * 0.66f, weight = 650, rond = 100, tabular = true)
+        }
+        Spacer(GlanceModifier.height(4.dp))
+        BodyText("Media generale", 12, GlanceTheme.colors.onSurfaceVariant, bold = true)
+        val listHeight = height - ring - 4.dp - 16.dp - 10.dp
+        if (listHeight < 48.dp) return@Column
+        Spacer(GlanceModifier.height(10.dp))
+        val cols = if (innerWidth() >= 250.dp) 2 else 1
+        val recent = model.gradeBook.grades.sortedByDescending { it.date }
+        if (recent.isEmpty()) return@Column BodyText("Nessun voto", 13, GlanceTheme.colors.onSurfaceVariant)
+        val list = fit((recent.size + cols - 1) / cols, listHeight + 22.dp, 48.dp, 56.dp)
+        val rows = list.count
+        val rowHeight = list.height
+        if (rows == 0) return@Column
+        Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
+            for (col in 0 until cols) {
+                if (col > 0) Spacer(GlanceModifier.width(6.dp))
+                Column(GlanceModifier.defaultWeight().fillMaxSize()) {
+                    val mine = recent.drop(col * rows).take(rows)
+                    mine.forEachIndexed { index, grade -> GradeRow(grade, index, rows, rowHeight, palette) }
+                }
+            }
+        }
+    }
+}
+
 /** Un voto come nella schermata Voti: biscotto nel colore del voto se fa media, cerchio grigio se no. */
 @Composable
-private fun GradeCell(grade: Grade, c: BCWColors, modifier: GlanceModifier) {
+private fun androidx.glance.layout.ColumnScope.GradeRow(grade: Grade, index: Int, count: Int, height: Dp?, palette: Palette) {
     val counts = grade.countsTowardAverage && !grade.canceled
-    val tone = gradeToneOf(grade, c)
-    val fill = if (counts) tone.container else c.scheme.surfaceContainerHigh
-    val textColor = if (counts) tone.onContainer else c.scheme.onSurfaceVariant
-    Row(modifier.height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(GlanceModifier.size(44.dp), contentAlignment = Alignment.Center) {
+    val context = LocalContext.current
+    SegmentRow(index, count, palette.of { it.scheme.surfaceContainerHigh }, height) {
+        Box(GlanceModifier.size(34.dp), contentAlignment = Alignment.Center) {
             Image(
-                provider = ImageProvider(WidgetArt.badge(fill.toArgb(), 66, counts)), contentDescription = null,
-                modifier = GlanceModifier.size(44.dp),
+                provider = ImageProvider(WidgetArt.badge(context, 34f, counts)), contentDescription = null,
+                colorFilter = ColorFilter.tint(palette.of { if (counts) gradeToneOf(grade, it).container else it.scheme.surfaceContainerHighest }),
+                modifier = GlanceModifier.size(34.dp),
             )
-            Text(grade.displayValue, maxLines = 1, style = TextStyle(color = textColor.toGlance(), fontSize = 15.sp, fontWeight = FontWeight.Bold))
+            SansText(grade.displayValue, 14f, palette.of { if (counts) gradeToneOf(grade, it).onContainer else it.scheme.onSurfaceVariant }, 34.dp, weight = 700, rond = 100, tabular = true)
         }
         Spacer(GlanceModifier.width(10.dp))
         Column(GlanceModifier.defaultWeight()) {
-            Text(grade.subjectName, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold))
-            Text(Fmt.shortDay(grade.date), maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp))
+            BodyText(grade.subjectName, 13, GlanceTheme.colors.onSurface, bold = true)
+            BodyText(Fmt.shortDay(grade.date), 11, GlanceTheme.colors.onSurfaceVariant)
         }
     }
 }
@@ -440,64 +523,86 @@ class AverageWidgetReceiver : GlanceAppWidgetReceiver() {
 // MARK: - Lezione in corso
 
 class NowWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val model = Widgets.model(context)
         val (light, dark) = Widgets.colors(context)
-        provideContent { WidgetFrame(context, "bcw://orario") { NowContent(model, light, dark) } }
+        val palette = Palette(light, dark)
+        val shown = nowState(model)
+        val tint = shown?.lesson?.tint
+        provideContent {
+            WidgetFrame(
+                context, "bcw://orario", palette, "clock", shown?.label ?: "Lezione",
+                background = tint?.let { t -> palette.of { t.container(it) } },
+                accent = tint?.let { t -> palette.of { t.onContainer(it) } },
+            ) { NowContent(model, shown, palette) }
+        }
     }
 }
 
-/**
- * La lezione in corso (materia, aula, quanto manca con la barra e la lezione dopo); senza lezioni
- * in corso la prossima, anche di un altro giorno.
- */
-@Composable
-private fun NowContent(model: AppModel, light: BCWColors, dark: BCWColors) {
-    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
-    val store = model.timetable
-    if (store.isEmpty) return Empty("Crea l'orario nell'app")
+/** Cosa mostra "Lezione in corso": la lezione, l'etichetta in alto, quella dopo e se è in corso. */
+private class NowState(val lesson: LivePhase, val label: String, val current: Boolean, val following: LivePhase?, val minute: Int)
+
+private fun nowState(model: AppModel): NowState? {
+    if (model.phase != Phase.signedIn || model.timetable.isEmpty) return null
     val today = Dates.today()
     val minute = Dates.nowMinute()
     val todayLessons = LivePlan.phases(model, today, true).filter { !it.isBreak }
-    val current = todayLessons.firstOrNull { it.start <= minute && minute < it.end }
-    val nextToday = todayLessons.firstOrNull { it.start > minute }
-    val laterDay = if (current == null && nextToday == null) defaultTimetableDay({ store.entries(it, false) }) else null
-    val shown = current ?: nextToday ?: laterDay?.let { d -> LivePlan.phases(model, d, true).firstOrNull { !it.isBreak } } ?: return Empty("Nessuna lezione")
-    fun tint(c: BCWColors) = when (val t = shown.tint) {
-        is EntryTint.Subject -> c.subject(t.index).color
-        EntryTint.Break -> c.breakTint
-        is EntryTint.Hex -> Color(0xFF000000.toInt() or t.hex)
+    todayLessons.firstOrNull { it.start <= minute && minute < it.end }?.let { current ->
+        return NowState(current, "Adesso", true, todayLessons.firstOrNull { it.start >= current.end }, minute)
     }
-    val label = when {
-        current != null -> "ADESSO"
-        laterDay == null -> "TRA ${TimeOfDay.duration(shown.start - minute).uppercase(Dates.italian)}"
-        Dates.isTomorrow(laterDay) -> "DOMANI ALLE ${TimeOfDay.string(shown.start)}"
-        else -> "${Weekday.name(Weekday.of(laterDay)).uppercase(Dates.italian)} ALLE ${TimeOfDay.string(shown.start)}"
+    todayLessons.firstOrNull { it.start > minute }?.let { next ->
+        return NowState(next, "Tra ${TimeOfDay.duration(next.start - minute)}", false, todayLessons.firstOrNull { it.start >= next.end }, minute)
     }
-    val following = if (current != null) todayLessons.firstOrNull { it.start >= current.end } else null
+    val day = defaultTimetableDay({ model.timetable.entries(it, false) })
+    val lessons = LivePlan.phases(model, day, true).filter { !it.isBreak }
+    val first = lessons.firstOrNull() ?: return null
+    val label = if (Dates.isTomorrow(day)) "Domani" else Weekday.name(Weekday.of(day))
+    return NowState(first, label, false, lessons.firstOrNull { it.start >= first.end }, minute)
+}
+
+/**
+ * La lezione sul colore della materia (come la schermata dell'orologio): il nome grande, aula e
+ * docente; in basso l'orario in un chip o, se è in corso, quanto manca con la barra; poi la lezione
+ * dopo.
+ */
+@Composable
+private fun NowContent(model: AppModel, state: NowState?, palette: Palette) {
+    if (model.phase != Phase.signedIn) return Empty("clock", "Accedi a BCW")
+    if (model.timetable.isEmpty) return Empty("timetable", "Crea l'orario nella app")
+    if (state == null) return Empty("clock", "Nessuna lezione")
+    val lesson = state.lesson
+    val on = palette.of { lesson.tint.onContainer(it) }
+    val onSoft = palette.of { lesson.tint.onContainer(it).copy(alpha = 0.78f) }
+    val width = innerWidth()
+    val tall = innerHeight() >= 130.dp
     Column(GlanceModifier.fillMaxSize()) {
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(GlanceModifier.width(4.dp).height(14.dp).background(Widgets.dual(tint(light), tint(dark))).cornerRadius(2.dp)) {}
-            Spacer(GlanceModifier.width(6.dp))
-            Text(label, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
-        }
-        Spacer(GlanceModifier.height(6.dp))
-        Text(shown.title, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold))
-        if (shown.room.isNotEmpty()) Text(shown.room, maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
+        SansText(lesson.title, if (tall) 22f else 18f, on, width, weight = 650, rond = 100, maxLines = if (tall) 3 else 2)
+        val detail = listOf(lesson.room, lesson.teacher).filter { it.isNotBlank() }.joinToString(" · ")
+        if (detail.isNotEmpty()) BodyText(detail, 12, onSoft, modifier = GlanceModifier.padding(top = 2.dp))
         Spacer(GlanceModifier.defaultWeight())
-        if (current != null) {
-            Text("Fino alle ${TimeOfDay.string(current.end)} · ${TimeOfDay.duration(current.end - minute)}", maxLines = 1,
-                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+        if (state.current) {
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BodyText("fino alle ${TimeOfDay.string(lesson.end)}", 12, onSoft, modifier = GlanceModifier.defaultWeight())
+                SansText(TimeOfDay.duration(lesson.end - state.minute), 15f, on, width / 2, weight = 650, rond = 100)
+            }
             Spacer(GlanceModifier.height(4.dp))
             LinearProgressIndicator(
-                progress = (minute - current.start).toFloat() / (current.end - current.start),
-                modifier = GlanceModifier.fillMaxWidth().height(6.dp),
-                color = GlanceTheme.colors.primary, backgroundColor = GlanceTheme.colors.secondaryContainer,
+                progress = ((state.minute - lesson.start).toFloat() / (lesson.end - lesson.start)).coerceIn(0f, 1f),
+                modifier = GlanceModifier.fillMaxWidth().height(6.dp).cornerRadius(3.dp),
+                color = on, backgroundColor = palette.of { lesson.tint.onContainer(it).copy(alpha = 0.2f) },
             )
-            following?.let {
-                Spacer(GlanceModifier.height(6.dp))
-                Text("Poi ${it.title} alle ${TimeOfDay.string(it.start)}", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
+        } else {
+            Box(
+                GlanceModifier.background(palette.of { lesson.tint.onContainer(it).copy(alpha = 0.12f) }).cornerRadius(12.dp).padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                SansText("${TimeOfDay.string(lesson.start)}–${TimeOfDay.string(lesson.end)}", 14f, on, width, weight = 600, rond = 100, tabular = true)
             }
+        }
+        state.following?.let {
+            Spacer(GlanceModifier.height(6.dp))
+            BodyText("Poi ${it.title} alle ${TimeOfDay.string(it.start)}", 12, onSoft)
         }
     }
 }
@@ -509,33 +614,58 @@ class NowWidgetReceiver : GlanceAppWidgetReceiver() {
 // MARK: - Prossima verifica
 
 class NextTestWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val model = Widgets.model(context)
+        val (light, dark) = Widgets.colors(context)
+        val palette = Palette(light, dark)
         val next = if (model.phase == Phase.signedIn) model.agenda.filter { it.kind == AgendaKind.test && !it.day.isBefore(Dates.today()) }.minByOrNull { it.begin } else null
         val link = next?.let { "bcw://dashboard?giorno=${Dates.dayKey(it.day)}" } ?: "bcw://dashboard"
-        provideContent { WidgetFrame(context, link) { NextTestContent(model, next) } }
+        provideContent {
+            WidgetFrame(context, link, palette, "test", "Prossima verifica", accent = GlanceTheme.colors.tertiary) { NextTestContent(model, next) }
+        }
     }
 }
 
-/** La prossima verifica con i giorni che mancano. */
+/**
+ * La prossima verifica: quanto manca in un biscotto nel terziario (come i badge della app), la
+ * materia o il docente, il giorno, e sotto la descrizione; tutto centrato in altezza.
+ */
 @Composable
-private fun NextTestContent(model: AppModel, test: com.bcw.classeviva.data.AgendaEvent?) {
-    if (model.phase != Phase.signedIn) return Empty("Accedi a BCW")
-    if (test == null) return Empty("Nessuna verifica in vista")
+private fun NextTestContent(model: AppModel, test: AgendaEvent?) {
+    if (model.phase != Phase.signedIn) return Empty("test", "Accedi a BCW")
+    if (test == null) return Empty("test", "Nessuna verifica in vista")
     val days = Dates.daysBetween(Dates.today(), test.day)
-    val whenText = when (days) {
-        0L -> "Oggi"
-        1L -> "Domani"
-        else -> "Tra $days giorni"
-    }
-    Column(GlanceModifier.fillMaxSize()) {
-        Text("PROSSIMA VERIFICA", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.tertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold))
-        Spacer(GlanceModifier.height(6.dp))
-        Text(test.title, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold))
-        if (test.notes.isNotEmpty()) Text(test.notes, maxLines = 2, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 12.sp))
-        Spacer(GlanceModifier.defaultWeight())
-        Box(GlanceModifier.background(GlanceTheme.colors.tertiaryContainer).cornerRadius(WidgetShape.item).padding(horizontal = 12.dp, vertical = 6.dp)) {
-            Text("$whenText · ${Fmt.shortDay(test.day)}", maxLines = 1, style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+    val width = innerWidth()
+    val context = LocalContext.current
+    Column(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.size(60.dp), contentAlignment = Alignment.Center) {
+                Image(
+                    provider = ImageProvider(WidgetArt.badge(context, 60f, true)), contentDescription = null,
+                    colorFilter = ColorFilter.tint(GlanceTheme.colors.tertiaryContainer), modifier = GlanceModifier.size(60.dp),
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    when (days) {
+                        0L -> SansText("Oggi", 15f, GlanceTheme.colors.onTertiaryContainer, 56.dp, weight = 700, rond = 100)
+                        1L -> SansText("Domani", 13f, GlanceTheme.colors.onTertiaryContainer, 56.dp, weight = 700, rond = 100)
+                        else -> {
+                            SansText("$days", 22f, GlanceTheme.colors.onTertiaryContainer, 56.dp, weight = 700, rond = 100, tabular = true)
+                            BodyText("giorni", 10, GlanceTheme.colors.onTertiaryContainer)
+                        }
+                    }
+                }
+            }
+            Spacer(GlanceModifier.width(12.dp))
+            Column(GlanceModifier.defaultWeight()) {
+                SansText(test.title, 17f, GlanceTheme.colors.onSurface, width - 72.dp, weight = 650, rond = 100, maxLines = 2)
+                BodyText(Fmt.relativeShortDayName(test.day) + if (test.isFullDay) "" else " · ${test.timeDescription}", 12, GlanceTheme.colors.onSurfaceVariant)
+            }
+        }
+        if (test.notes.isNotEmpty()) {
+            Spacer(GlanceModifier.height(10.dp))
+            BodyText(test.notes, 13, GlanceTheme.colors.onSurfaceVariant, maxLines = if (innerHeight() >= 160.dp) 4 else 2)
         }
     }
 }
