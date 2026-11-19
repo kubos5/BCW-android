@@ -76,6 +76,8 @@
 
         <receiver android:name=".platform.ReminderReceiver" android:exported="false" />
         <receiver android:name=".platform.LiveUpdateReceiver" android:exported="false" />
+        <!-- Risposta del PackageInstaller all'aggiornamento dentro all'app: apre la conferma di sistema. -->
+        <receiver android:name=".platform.InstallStatusReceiver" android:exported="false" />
         <receiver android:name=".platform.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

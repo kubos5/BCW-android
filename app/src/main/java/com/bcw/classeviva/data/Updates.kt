@@ -289,7 +289,8 @@ class UpdateInstaller(private val context: Context) {
             val session = installer.openSession(sessionId)
             session.use {
                 file.inputStream().use { input -> session.openWrite("BCW.apk", 0, file.length()).use { output -> input.copyTo(output) } }
-                val intent = Intent(context.packageName).setPackage(context.packageName)
+                // Risposta al receiver esplicito: con la conferma dell'utente da dare apre la schermata di sistema.
+                val intent = Intent(context, com.bcw.classeviva.platform.InstallStatusReceiver::class.java)
                 val pending = android.app.PendingIntent.getBroadcast(
                     context, sessionId, intent,
                     android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
