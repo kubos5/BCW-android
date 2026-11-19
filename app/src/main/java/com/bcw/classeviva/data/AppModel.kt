@@ -40,6 +40,8 @@ interface PlatformHooks {
     fun notify(title: String, body: String, tag: String, channel: String)
     fun rescheduleReminders(plan: List<ReminderPlanItem>)
     fun dataChanged()
+    /** L'orario è cambiato (`TimetableStore.onChanged`): l'unico momento in cui va all'orologio. */
+    fun timetableChanged() {}
 }
 
 data class ReminderPlanItem(val id: String, val fireAt: LocalDateTime, val title: String, val body: String)
@@ -149,6 +151,7 @@ class AppModel(context: Context, var hooks: PlatformHooks? = null) {
             sync.timetableChanged(owner)
             hooks?.dataChanged()
         }
+        timetable.onChanged = { hooks?.timetableChanged() }
         timetable.remoteFile = { owner, name -> sync.fetchFile(owner, name) }
     }
 

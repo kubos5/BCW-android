@@ -1,7 +1,6 @@
 package com.bcw.classeviva
 
 import android.app.Application
-import android.content.res.Configuration
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.PlatformHooks
 import com.bcw.classeviva.data.ReminderPlanItem
@@ -52,26 +51,14 @@ class BCWApplication : Application() {
                     Widgets.updateAll(this@BCWApplication)
                     LiveUpdates.refresh(this@BCWApplication)
                     BackgroundRefresh.schedule(this@BCWApplication, model)
-                    WearSync.timetableChanged(this@BCWApplication, model.timetable, model.preferences)
                 }
             }
+
+            // L'orario va all'orologio solo quando cambia (o da Impostazioni › Smartwatch e quando
+            // l'orologio lo chiede aprendo BCW): niente invii all'avvio o a ogni aggiornamento dei dati.
+            override fun timetableChanged() = WearSync.timetableChanged(this@BCWApplication, model.timetable, model.preferences)
         }
         // All'avvio in background (widget, notifiche) solo la cache: l'aggiornamento parte aprendo l'app.
         model.bootstrap(refresh = false)
-        // Anche se l'orologio non ha chiesto nulla, l'ultimo orario gli resta a disposizione.
-        // Qualche secondo dopo l'avvio, in background: l'apertura dell'app viene prima.
-        WearSync.timetableChanged(this, model.timetable, model.preferences, delayMillis = 3_000)
-        lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-    }
-
-    private var lastNight = Configuration.UI_MODE_NIGHT_UNDEFINED
-
-    /** Il telefono passa al tema chiaro o scuro: con "Automatico" l'orologio lo segue. */
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        if (night == lastNight) return
-        lastNight = night
-        if (::model.isInitialized) WearSync.timetableChanged(this, model.timetable, model.preferences)
     }
 }

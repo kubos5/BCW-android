@@ -66,6 +66,11 @@ class TimetableStore(private val root: File) {
 
     /** Avvisa la sincronizzazione dopo ogni salvataggio. */
     var onSaved: ((String) -> Unit)? = null
+    /**
+     * L'orario mostrato è cambiato davvero: salvataggio, orario arrivato dal server, passaggio a un
+     * altro account (non il primo caricamento all'avvio). Solo questo manda l'orario all'orologio.
+     */
+    var onChanged: (() -> Unit)? = null
     /** Scarica dal server un file mancante (account BCW). */
     var remoteFile: (suspend (owner: String, storedName: String) -> ByteArray?)? = null
 
@@ -83,6 +88,7 @@ class TimetableStore(private val root: File) {
 
     /** Carica l'orario di un account (`null` = nessuna sessione). */
     fun load(newOwner: String?) {
+        val switched = owner != null && newOwner != owner
         owner = newOwner
         draft = null
         saveError = null
@@ -96,6 +102,7 @@ class TimetableStore(private val root: File) {
         timetable = loaded
         reindex()
         removeUnreferencedFiles()
+        if (switched) onChanged?.invoke()
     }
 
     /** Cancella del tutto l'orario di un proprietario (es. quello della demo). */
@@ -139,6 +146,7 @@ class TimetableStore(private val root: File) {
             return
         }
         onSaved?.invoke(o)
+        onChanged?.invoke()
     }
 
     /** Sostituisce l'orario con quello arrivato dal server (senza avvisare `onSaved`). Restituisce il JSON salvato. */
@@ -150,6 +158,7 @@ class TimetableStore(private val root: File) {
             timetable = decoded
             reindex()
             removeUnreferencedFiles()
+            onChanged?.invoke()
         }
         return text
     }

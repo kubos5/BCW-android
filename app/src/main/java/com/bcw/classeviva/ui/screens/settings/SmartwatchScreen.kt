@@ -70,6 +70,8 @@ fun SmartwatchPane() {
     val ui = LocalUi.current
     val context = LocalContext.current
     val p = model.preferences
+    // Le scelte fatte qui sono un invio esplicito: vanno all'orologio (unite se ravvicinate).
+    val sendSoon = { WearSync.timetableChanged(context, model.timetable, p) }
     var status by remember { mutableStateOf<WatchStatus?>(null) }
     var round by remember { mutableIntStateOf(0) }
 
@@ -90,12 +92,12 @@ fun SmartwatchPane() {
 
         ListGroup(
             header = "Sincronizzazione",
-            footer = if (p.watchSyncAppearance) "L'orario arriva sull'orologio da solo a ogni modifica, con tema e colori di BCW."
-            else "L'orario arriva sull'orologio da solo a ogni modifica. L'aspetto dell'orologio si sceglie qui sotto.",
+            footer = if (p.watchSyncAppearance) "L'orario va sull'orologio quando lo modifichi o con Invia l'orario ora. Tema e colori di BCW cambiati arrivano con il prossimo invio."
+            else "L'orario va sull'orologio quando lo modifichi o con Invia l'orario ora. L'aspetto dell'orologio si sceglie qui sotto.",
         ) {
             item {
                 ToggleRow(
-                    "Sincronizza le impostazioni", p.watchSyncAppearance, { p.set("watchSyncAppearance", it) }, icon = "sync",
+                    "Sincronizza le impostazioni", p.watchSyncAppearance, { p.set("watchSyncAppearance", it); sendSoon() }, icon = "sync",
                     subtitle = "Tema e colori dell'orologio uguali a BCW",
                 )
             }
@@ -111,7 +113,7 @@ fun SmartwatchPane() {
         }
 
         Collapsible(expanded = !p.watchSyncAppearance) {
-            WatchAppearanceGroup()
+            WatchAppearanceGroup(onChange = sendSoon)
         }
 
         HowToConnectGroup()
@@ -214,8 +216,9 @@ private fun WatchDrawing(connected: Boolean) {
 
 /** Spenta la sincronizzazione: tema, colore, stile e contrasto solo per l'orologio. */
 @Composable
-private fun WatchAppearanceGroup() {
+private fun WatchAppearanceGroup(onChange: () -> Unit) {
     val p = LocalModel.current.preferences
+    fun set(key: String, value: String) { p.set(key, value); onChange() }
     var picking by remember { mutableStateOf(false) }
     val accent = normalizeHex(p.string("watchAccentColor")) ?: DEFAULT_ACCENT
     val style = ColorStyle.entries.firstOrNull { it.name == p.string("watchColorStyle") } ?: ColorStyle.tonalSpot
@@ -227,20 +230,20 @@ private fun WatchAppearanceGroup() {
     ) {
         item {
             ListRow("Tema", leading = { FormIcon("sun") }, trailing = {
-                SelectButton(AppearanceMode.entries.map { it to it.title }, appearance, { p.set("watchAppearance", it.name) })
+                SelectButton(AppearanceMode.entries.map { it to it.title }, appearance, { set("watchAppearance", it.name) })
             })
         }
         item {
-            AccentPicker(accent, style, Theme.isDark, onPick = { p.set("watchAccentColor", it) }, onCustom = { picking = true })
+            AccentPicker(accent, style, Theme.isDark, onPick = { set("watchAccentColor", it) }, onCustom = { picking = true })
         }
         item {
             ListRow("Stile dei colori", subtitle = style.subtitle, leading = { FormIcon("colorStyle") }, trailing = {
-                SelectButton(ColorStyle.entries.map { it to it.title }, style, { p.set("watchColorStyle", it.name) })
+                SelectButton(ColorStyle.entries.map { it to it.title }, style, { set("watchColorStyle", it.name) })
             })
         }
         item {
             ListRow("Contrasto", leading = { FormIcon("contrast") }, trailing = {
-                SelectButton(ContrastLevel.entries.map { it to it.title }, contrast, { p.set("watchContrast", it.name) })
+                SelectButton(ContrastLevel.entries.map { it to it.title }, contrast, { set("watchContrast", it.name) })
             })
         }
         item {
@@ -249,11 +252,12 @@ private fun WatchAppearanceGroup() {
                 p.set("watchAccentColor", normalizeHex(p.string("accentColor")) ?: DEFAULT_ACCENT)
                 p.set("watchColorStyle", p.string("colorStyle"))
                 p.set("watchContrast", p.string("contrast"))
+                onChange()
             })
         }
     }
     if (picking) {
-        ColorPickerDialog(accent, onDismiss = { picking = false }, title = "Colore dell'orologio") { p.set("watchAccentColor", it) }
+        ColorPickerDialog(accent, onDismiss = { picking = false }, title = "Colore dell'orologio") { set("watchAccentColor", it) }
     }
 }
 

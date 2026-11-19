@@ -36,7 +36,9 @@ object WatchStatusReader {
         fun fromSaved(unavailable: Boolean = false) =
             WatchStatus(saved?.let(::modelName), saved?.let(::modelCode), connected = false, appInstalled = false, unavailable = unavailable)
 
-        if (GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) != ConnectionResult.SUCCESS) return fromSaved(unavailable = true)
+        // Senza servizi Google (o con un'eccezione al controllo) la pagina dice che non sono disponibili.
+        val available = runCatching { GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS }.getOrDefault(false)
+        if (!available) return fromSaved(unavailable = true)
         val nodes = withTimeoutOrNull(4_000) { Wearable.getNodeClient(context).connectedNodes.awaitOrNull() }.orEmpty()
         val node = nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull() ?: return fromSaved()
         prefs.edit().putString("name", node.displayName).apply()
