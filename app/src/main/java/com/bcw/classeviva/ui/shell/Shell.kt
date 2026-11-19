@@ -11,9 +11,21 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -249,20 +261,79 @@ private fun TabsContent(peekPage: Pair<Int, Page>? = null, underlay: Modifier = 
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
             }
         }
-        AnimatedContent(modifier = foreground, targetState = nav.tab, transitionSpec = { Transitions.fadeThrough(reduced) }, label = "tabs") { tab ->
-            val stack = nav.stack(tab)
-            AnimatedContent(
-                targetState = stack.size - 1 to stack.last(),
-                transitionSpec = { Transitions.sharedAxisX(if (targetState.first >= initialState.first) 1 else -1, reduced) },
-                contentKey = { "${it.first}-${it.second}" },
-                label = "pages",
-            ) { (index, page) ->
-                val key = "${tab.name}/$index/$page"
-                holder.SaveableStateProvider(key) {
-                    CompositionLocalProvider(LocalPageContext provides PageContext(tab, nav.tab == tab && index == nav.stack(tab).size - 1, index == 0)) {
-                        PageContent(page)
-                    }
+        // Le schede già aperte restano composte: tornarci è immediato, senza ricostruire liste,
+        // grafici e caricamenti (con `AnimatedContent` ogni passaggio rifaceva la scheda da zero ed
+        // era lento, soprattutto nella build debug). Quella non in vista non si misura, non si
+        // disegna e non riceve tocchi. Il passaggio è la dissolvenza di M3 (fade through) con le
+        // stesse durate di `Transitions.fadeThrough`.
+        val visited = remember { mutableStateListOf(nav.tab) }
+        if (nav.tab !in visited) visited += nav.tab
+        // Dopo l'apertura le altre schede si preparano da nascoste, una alla volta: anche la prima
+        // visita è immediata, e il lavoro non pesa sull'avvio.
+        val showsTimetable = LocalModel.current.preferences.showsTimetableTab
+        LaunchedEffect(Unit) {
+            delay(1_200)
+            for (t in visibleTabs(showsTimetable)) {
+                if (t in visited) continue
+                visited += t
+                delay(400)
+            }
+        }
+        val transition = updateTransition(nav.tab, label = "tabs")
+        Box(Modifier.fillMaxSize().then(foreground)) {
+            for (tab in visited) key(tab) {
+                val alpha by transition.animateFloat(
+                    transitionSpec = {
+                        when {
+                            targetState == tab -> if (reduced) tween(150) else tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)
+                            else -> if (reduced) tween(100) else tween(90, easing = FastOutSlowInEasing)
+                        }
+                    },
+                    label = "alpha",
+                ) { if (it == tab) 1f else 0f }
+                val scale by transition.animateFloat(
+                    transitionSpec = {
+                        if (targetState == tab && !reduced) tween(210, delayMillis = 90, easing = LinearOutSlowInEasing) else snap(delayMillis = 100)
+                    },
+                    label = "scale",
+                ) { if (it == tab || reduced) 1f else 0.94f }
+                val active = tab == nav.tab
+                val shown by rememberUpdatedState(active || (transition.isRunning && (tab == transition.currentState || tab == transition.targetState)))
+                Box(
+                    Modifier.fillMaxSize().zIndex(if (active) 1f else 0f)
+                        // Sempre la stessa catena di modificatori: nascosta, la scheda è misurata
+                        // (Compose la rimisura solo se cambia qualcosa) ma non posizionata, quindi né
+                        // disegnata né toccabile; tornandoci cambia solo il posizionamento.
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            layout(constraints.maxWidth, constraints.maxHeight) { if (shown) placeable.place(0, 0) }
+                        }
+                        .graphicsLayer { this.alpha = alpha; scaleX = scale; scaleY = scale }
+                        // Le schede nascoste non esistono per TalkBack e per chi legge lo schermo.
+                        .then(if (active) Modifier else Modifier.clearAndSetSemantics { }),
+                ) {
+                    TabStack(tab, holder, reduced)
                 }
+            }
+        }
+    }
+}
+
+/** Le pagine di una scheda: asse condiviso tra una pagina e l'altra. */
+@Composable
+private fun TabStack(tab: Tab, holder: androidx.compose.runtime.saveable.SaveableStateHolder, reduced: Boolean) {
+    val nav = LocalNavigator.current
+    val stack = nav.stack(tab)
+    AnimatedContent(
+        targetState = stack.size - 1 to stack.last(),
+        transitionSpec = { Transitions.sharedAxisX(if (targetState.first >= initialState.first) 1 else -1, reduced) },
+        contentKey = { "${it.first}-${it.second}" },
+        label = "pages",
+    ) { (index, page) ->
+        val key = "${tab.name}/$index/$page"
+        holder.SaveableStateProvider(key) {
+            CompositionLocalProvider(LocalPageContext provides PageContext(tab, nav.tab == tab && index == nav.stack(tab).size - 1, index == 0)) {
+                PageContent(page)
             }
         }
     }

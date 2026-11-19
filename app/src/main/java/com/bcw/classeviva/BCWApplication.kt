@@ -1,7 +1,6 @@
 package com.bcw.classeviva
 
 import android.app.Application
-import android.content.res.Configuration
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.PlatformHooks
 import com.bcw.classeviva.data.ReminderPlanItem
@@ -10,6 +9,8 @@ import com.bcw.classeviva.platform.LiveUpdates
 import com.bcw.classeviva.platform.Notifier
 import com.bcw.classeviva.platform.ReminderScheduler
 import com.bcw.classeviva.platform.WearSync
+import com.bcw.classeviva.ui.theme.ThemeSettings
+import com.bcw.classeviva.ui.theme.generatedTheme
 import com.bcw.classeviva.widget.Widgets
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +27,10 @@ class BCWApplication : Application() {
         super.onCreate()
         Notifier.createChannels(this)
         model = AppModel(this)
+        // I colori del tema (ColorEngine, oltre 100 ms in debug) si generano in background mentre
+        // si crea l'activity: il primo disegno li trova pronti invece di aspettarli.
+        val theme = ThemeSettings.from(model.preferences)
+        if (!theme.dynamicColor) Thread({ generatedTheme(theme.accent, theme.style, theme.contrast) }, "bcw-tema").start()
         model.hooks = object : PlatformHooks {
             override fun notify(title: String, body: String, tag: String, channel: String) {
                 val link = when {
@@ -46,25 +51,14 @@ class BCWApplication : Application() {
                     Widgets.updateAll(this@BCWApplication)
                     LiveUpdates.refresh(this@BCWApplication)
                     BackgroundRefresh.schedule(this@BCWApplication, model)
-                    WearSync.timetableChanged(this@BCWApplication, model.timetable, model.preferences)
                 }
             }
+
+            // L'orario va all'orologio solo quando cambia (o da Impostazioni › Smartwatch e quando
+            // l'orologio lo chiede aprendo BCW): niente invii all'avvio o a ogni aggiornamento dei dati.
+            override fun timetableChanged() = WearSync.timetableChanged(this@BCWApplication, model.timetable, model.preferences)
         }
         // All'avvio in background (widget, notifiche) solo la cache: l'aggiornamento parte aprendo l'app.
         model.bootstrap(refresh = false)
-        // Anche se l'orologio non ha chiesto nulla, l'ultimo orario gli resta a disposizione.
-        WearSync.pushNow(this, model.timetable, model.preferences)
-        lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-    }
-
-    private var lastNight = Configuration.UI_MODE_NIGHT_UNDEFINED
-
-    /** Il telefono passa al tema chiaro o scuro: con "Automatico" l'orologio lo segue. */
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        if (night == lastNight) return
-        lastNight = night
-        if (::model.isInitialized) WearSync.timetableChanged(this, model.timetable, model.preferences)
     }
 }
