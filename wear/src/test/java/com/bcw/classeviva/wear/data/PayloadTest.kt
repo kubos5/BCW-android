@@ -76,6 +76,26 @@ class PayloadTest {
     }
 
     @Test
+    fun versione3ConSchemaETema() {
+        val light = REQUIRED_ROLES.withIndex().joinToString(",") { (i, r) -> "\"$r\": ${1000 + i}" }
+        val dark = REQUIRED_ROLES.withIndex().joinToString(",") { (i, r) -> "\"$r\": ${2000 + i}" }
+        val payload = parsePayload("""{"version": 3, "dark": true, "scheme": {"light": {$light}, "dark": {$dark}}, "entries": []}""")!!
+        assertEquals(true, payload.dark)
+        val scheme = payload.scheme!!
+        assertEquals(1000, scheme.light["primary"])
+        assertEquals(2000 + REQUIRED_ROLES.indexOf("surface"), scheme.dark["surface"])
+    }
+
+    @Test
+    fun schemaIncompletoIgnorato() {
+        // Manca "surface": lo schema non vale e l'orologio genera i colori dall'accento.
+        val roles = REQUIRED_ROLES.filter { it != "surface" }.joinToString(",") { "\"$it\": 1" }
+        val payload = parsePayload("""{"scheme": {"light": {$roles}, "dark": {$roles}}, "entries": []}""")!!
+        assertNull(payload.scheme)
+        assertNull(payload.dark)
+    }
+
+    @Test
     fun valoriMancantiConPredefiniti() {
         val payload = parsePayload("""{"entries": []}""")!!
         assertEquals(DEFAULT_ACCENT, payload.accent)

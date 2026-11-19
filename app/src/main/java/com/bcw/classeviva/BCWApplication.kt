@@ -1,6 +1,7 @@
 package com.bcw.classeviva
 
 import android.app.Application
+import android.content.res.Configuration
 import com.bcw.classeviva.data.AppModel
 import com.bcw.classeviva.data.PlatformHooks
 import com.bcw.classeviva.data.ReminderPlanItem
@@ -53,5 +54,17 @@ class BCWApplication : Application() {
         model.bootstrap(refresh = false)
         // Anche se l'orologio non ha chiesto nulla, l'ultimo orario gli resta a disposizione.
         WearSync.pushNow(this, model.timetable, model.preferences)
+        lastNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    }
+
+    private var lastNight = Configuration.UI_MODE_NIGHT_UNDEFINED
+
+    /** Il telefono passa al tema chiaro o scuro: con "Automatico" l'orologio lo segue. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (night == lastNight) return
+        lastNight = night
+        if (::model.isInitialized) WearSync.timetableChanged(this, model.timetable, model.preferences)
     }
 }
